@@ -5,8 +5,13 @@ import { motion } from 'framer-motion';
 import { BackButton } from '@/components/BackButton';
 import { ClientOnly } from '@/components/ClientOnly';
 import { getUserData, updateUserData } from '@/lib/streakManager';
-import { scheduleLocalNotifications, testScheduledNotification, testServiceWorkerNotification } from '@/lib/notificationHelper';
-import { requestNotificationPermission, subscribeToPushNotifications } from '@/lib/pushNotificationManager';
+import { 
+  requestOneSignalPermission, 
+  updateOneSignalNotificationSettings, 
+  sendOneSignalTestNotification,
+  toggleOneSignalNotifications,
+  getOneSignalPermissionState
+} from '@/lib/oneSignalHelper';
 
 export default function SettingsPage() {
   const [notificationSettings, setNotificationSettings] = useState({
@@ -36,51 +41,60 @@ export default function SettingsPage() {
       setNotificationSettings(JSON.parse(saved));
     }
 
-    // 通知権限をチェック
-    if ('Notification' in window) {
+    // OneSignal権限状態をチェック
+    const checkOneSignalPermission = async () => {
+      const enabled = await getOneSignalPermissionState();
       setNotificationSettings(prev => ({
         ...prev,
-        enabled: Notification.permission === 'granted',
+        enabled,
       }));
-    }
+    };
+    
+    // 少し遅延させてOneSignalの初期化を待つ
+    setTimeout(checkOneSignalPermission, 1000);
 
+    // OneSignal権限変更イベントリスナー
+    const handlePermissionChange = (event: CustomEvent) => {
+      setNotificationSettings(prev => ({
+        ...prev,
+        enabled: event.detail.enabled,
+      }));
+    };
+    
+    window.addEventListener('onesignal-permission-change', handlePermissionChange as any);
+    
     // PWA状態をチェック
     const isPWA = window.matchMedia('(display-mode: standalone)').matches;
     if (!isPWA && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
       console.log('iPhoneでPWAではない状態で実行中');
     }
+    
+    return () => {
+      window.removeEventListener('onesignal-permission-change', handlePermissionChange as any);
+    };
   }, []);
 
   const handleNotificationPermission = async () => {
-    if ('Notification' in window) {
-      try {
-        console.log('現在の通知許可状態:', Notification.permission);
-        const permission = await requestNotificationPermission();
-        console.log('リクエスト後の通知許可状態:', permission);
-        
-        const enabled = permission === 'granted';
-        
-        const newSettings = { ...notificationSettings, enabled };
-        setNotificationSettings(newSettings);
-        localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
-        
-        if (enabled) {
-          // Push通知を購読
-          await subscribeToPushNotifications();
-          // 通知を有効にした場合、スケジューリングを開始
-          await scheduleLocalNotifications();
-          // テスト通知を即座に表示
-          await scheduleLocalNotifications(true);
-          alert('通知が有効になりました！\n\n指定時刻に通知が届きます。\nバックグラウンドでも動作します。');
-        } else {
-          alert(`通知許可が拒否されました。状態: ${permission}\nブラウザの設定から手動で許可してください。`);
-        }
-      } catch (error) {
-        console.error('通知許可エラー:', error);
-        alert(`エラーが発生しました: ${error}`);
+    try {
+      console.log('OneSignal通知権限をリクエスト中...');
+      const enabled = await requestOneSignalPermission();
+      
+      const newSettings = { ...notificationSettings, enabled };
+      setNotificationSettings(newSettings);
+      localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
+      
+      if (enabled) {
+        // OneSignalの設定を更新
+        await updateOneSignalNotificationSettings(newSettings);
+        // テスト通知を送信
+        await sendOneSignalTestNotification('🎉 OneSignal通知が有効になりました！');
+        alert('通知が有効になりました！\n\n指定時刻に通知が届きます。\nバックグラウンドでも確実に動作します。');
+      } else {
+        alert('通知権限が拒否されました。\nブラウザの設定から手動で許可してください。');
       }
-    } else {
-      alert('このブラウザは通知をサポートしていません。\n\niPhoneの場合：\n1. Safariを使用してください\n2. 「ホーム画面に追加」でPWAとしてインストールしてください\n3. iOS 16.4以降が必要です');
+    } catch (error) {
+      console.error('通知許可エラー:', error);
+      alert(`エラーが発生しました: ${error}`);
     }
   };
 
@@ -89,29 +103,31 @@ export default function SettingsPage() {
     setNotificationSettings(newSettings);
     localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
     
-    // 設定変更時に通知を再スケジュール
+    // OneSignalの設定を更新
     if (newSettings.enabled) {
-      await scheduleLocalNotifications();
+      await updateOneSignalNotificationSettings(newSettings);
     }
   };
 
-  // 1分後に通知を送るテスト機能
+  // OneSignalテスト通知機能
   const handleScheduledTest = async () => {
     if (!notificationSettings.enabled) {
       alert('まず通知を有効にしてください。');
       return;
     }
     
-    const success = await testScheduledNotification();
+    const success = await sendOneSignalTestNotification('⏰ OneSignalテスト通知です！バックグラウンドでも確実に届きます。');
     if (success) {
-      alert('1分後にテスト通知を送信します。\n\nアプリをバックグラウンドにしても通知が届くか確認してください。');
+      alert('テスト通知を送信しました！\n\nアプリをバックグラウンドにしても通知が届くことを確認してください。');
+    } else {
+      alert('テスト通知の送信に失敗しました。');
     }
   };
 
-  // 定期通知の再スケジュール
+  // OneSignal設定の同期
   const rescheduleNotifications = async () => {
-    await scheduleLocalNotifications();
-    alert('定期通知を再スケジュールしました。\n\n設定した時刻に通知が届きます。');
+    await updateOneSignalNotificationSettings(notificationSettings);
+    alert('OneSignal通知設定を更新しました。\n\n設定した時刻に通知が届きます。');
   };
 
   // 詳細診断機能
@@ -228,10 +244,10 @@ ${permission !== 'granted' ? '⚠️ 通知許可が必要です' : ''}
                         onClick={handleScheduledTest}
                         className="w-full px-3 py-2 bg-indigo-500 text-white rounded-lg text-sm font-medium hover:bg-indigo-600 transition-colors"
                       >
-                        ⏰ 1分後にテスト通知
+                        📱 OneSignalテスト通知
                       </button>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        ※定期通知が正しく動作するか確認できます
+                        ※OneSignal経由で通知が届くか確認できます
                       </p>
                     </div>
                     <div className="space-y-3">
