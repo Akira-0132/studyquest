@@ -1,4 +1,4 @@
-const CACHE_NAME = 'studyquest-v1';
+const CACHE_NAME = 'studyquest-v2';
 const urlsToCache = [
   '/',
   '/schedule',
@@ -15,6 +15,7 @@ self.addEventListener('install', (event) => {
         return cache.addAll(urlsToCache);
       })
   );
+  self.skipWaiting(); // 即座に有効化
 });
 
 // フェッチ時
@@ -32,7 +33,47 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// プッシュ通知受信（MVP版では基本機能のみ）
+// メッセージリスナー（クライアントからの通知要求を受信）
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'NOTIFICATION_TEST') {
+    // テスト通知を即座に送信
+    self.registration.showNotification('StudyQuest', {
+      body: event.data.message || '📱 Service Workerからのテスト通知です',
+      icon: '/icon-192x192.png',
+      badge: '/icon-96x96.png',
+      tag: 'studyquest-test',
+      requireInteraction: false,
+    });
+  } else if (event.data && event.data.type === 'SCHEDULE_NOTIFICATION') {
+    // 定期通知のスケジュール
+    const { delay, message } = event.data;
+    
+    // タイマーIDを保存（後でクリアできるように）
+    if (!self.notificationTimers) {
+      self.notificationTimers = [];
+    }
+    
+    const timerId = setTimeout(() => {
+      self.registration.showNotification('StudyQuest', {
+        body: message,
+        icon: '/icon-192x192.png',
+        badge: '/icon-96x96.png',
+        tag: 'studyquest-scheduled',
+        requireInteraction: false,
+      });
+    }, delay);
+    
+    self.notificationTimers.push(timerId);
+  } else if (event.data && event.data.type === 'CLEAR_NOTIFICATIONS') {
+    // 既存のタイマーをクリア
+    if (self.notificationTimers) {
+      self.notificationTimers.forEach(timerId => clearTimeout(timerId));
+      self.notificationTimers = [];
+    }
+  }
+});
+
+// プッシュ通知受信（将来のサーバープッシュ用）
 self.addEventListener('push', (event) => {
   if (!event.data) return;
   
@@ -69,43 +110,21 @@ self.addEventListener('notificationclick', (event) => {
   }
 });
 
-// 定期的な通知スケジュール
-const scheduleNotifications = () => {
-  const settings = JSON.parse(localStorage.getItem('studyquest_notifications') || '{}');
-  
-  if (!settings.enabled) return;
+// Service Worker起動時
+self.addEventListener('activate', (event) => {
+  event.waitUntil(clients.claim()); // 即座にクライアントを制御
+});
 
-  const now = new Date();
-  const messages = [
-    { time: settings.morning || '07:00', message: 'おはよう！今日も頑張ろう！🌅' },
-    { time: settings.afternoon || '16:00', message: '学校お疲れさま！勉強始めよう📚' },
-    { time: settings.evening || '20:00', message: 'ラストスパート！もう少し！💪' },
-  ];
-
-  messages.forEach(({ time, message }) => {
-    const [hours, minutes] = time.split(':').map(Number);
-    const scheduledTime = new Date();
-    scheduledTime.setHours(hours, minutes, 0, 0);
-    
-    // 今日の時刻が過ぎていれば明日にスケジュール
-    if (scheduledTime <= now) {
-      scheduledTime.setDate(scheduledTime.getDate() + 1);
-    }
-    
-    const delay = scheduledTime.getTime() - now.getTime();
-    
-    setTimeout(() => {
+// 定期的な同期（実験的機能）
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'studyquest-notification') {
+    event.waitUntil(
       self.registration.showNotification('StudyQuest', {
-        body: message,
+        body: '📚 勉強の時間です！',
         icon: '/icon-192x192.png',
         badge: '/icon-96x96.png',
-        vibrate: [100, 50, 100],
-      });
-    }, delay);
-  });
-};
-
-// Service Worker起動時に通知をスケジュール
-self.addEventListener('activate', (event) => {
-  scheduleNotifications();
+        tag: 'studyquest-periodic',
+      })
+    );
+  }
 });
