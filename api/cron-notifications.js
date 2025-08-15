@@ -8,10 +8,10 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY || '6G5JiT6MSZlBNNXeWTVGy40V7-m176G7iWT3M7j2Fr4'
 );
 
-// 他のAPIから購読情報をインポート
-const { schedules } = require('./schedule-notifications');
+// ファイルベースストレージをインポート
+const { getAllSubscriptions } = require('./storage.js');
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // Vercel Cronからのリクエストかチェック
   const authHeader = req.headers['authorization'];
   const isFromCron = authHeader === `Bearer ${process.env.CRON_SECRET}`;
@@ -115,11 +115,12 @@ export default async function handler(req, res) {
       details: error.message
     });
   }
-}
+};
 
 // アクティブな購読情報を取得
 async function getActiveSubscriptions() {
-  // schedule-notifications.jsから購読情報を取得
+  // ファイルから購読情報を取得
+  const schedules = getAllSubscriptions();
   const activeSchedules = [];
   
   for (const [userKey, userData] of schedules.entries()) {

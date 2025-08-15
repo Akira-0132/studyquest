@@ -8,11 +8,10 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY || '6G5JiT6MSZlBNNXeWTVGy40V7-m176G7iWT3M7j2Fr4'
 );
 
-// 簡易的なスケジュールストレージ（本格実装はデータベース使用）
-// グローバルに共有するためexport  
-export const schedules = new Map();
+// ファイルベースストレージをインポート
+const { saveSubscriptionToEnv, getAllSubscriptions, saveSubscriptions } = require('./storage.js');
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // CORS設定
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
@@ -52,27 +51,24 @@ async function handleScheduleSet(req, res) {
   // ユーザーIDを生成（subscription endpointを基に）
   const userKey = userId || btoa(subscription.endpoint).substring(0, 20);
 
-  // スケジュールを保存
-  schedules.set(userKey, {
+  // スケジュールをファイルに保存
+  const userData = {
     subscription,
     schedule,
     createdAt: new Date(),
     lastNotified: {}
-  });
+  };
+  
+  const saved = saveSubscriptionToEnv(userKey, userData);
 
   console.log(`📅 Schedule set for user ${userKey}:`, schedule);
-
-  // 即座にテスト通知を送信
-  try {
-    await sendTestScheduleNotification(subscription);
-  } catch (error) {
-    console.warn('Test notification failed:', error);
-  }
+  console.log('🔕 Test notification disabled to prevent immediate alerts');
 
   return res.status(200).json({
     success: true,
     message: 'Schedule set successfully',
-    userKey
+    userKey,
+    saved: saved
   });
 }
 
@@ -87,6 +83,10 @@ async function handleScheduleCheck(req, res) {
   const results = [];
 
   console.log(`⏰ Checking schedules at ${currentHour}:${currentMinute.toString().padStart(2, '0')}`);
+
+  // ファイルから全購読情報を読み込み
+  const schedules = getAllSubscriptions();
+  console.log(`📊 Loaded ${schedules.size} schedules for checking`);
 
   for (const [userKey, userData] of schedules.entries()) {
     const { subscription, schedule, lastNotified } = userData;
@@ -111,8 +111,9 @@ async function handleScheduleCheck(req, res) {
         try {
           await sendScheduledNotification(subscription, slot.message, slot.key);
           
-          // 送信記録を更新
+          // 送信記録を更新してファイルに保存
           userData.lastNotified[slot.key] = today;
+          saveSubscriptionToEnv(userKey, userData);
           sentCount++;
 
           results.push({
@@ -142,7 +143,8 @@ async function handleScheduleCheck(req, res) {
     success: true,
     sentCount,
     totalUsers: schedules.size,
-    results: results.slice(0, 10) // 最大10件の詳細結果
+    results: results.slice(0, 10), // 最大10件の詳細結果
+    currentTime: `${currentHour}:${currentMinute.toString().padStart(2, '0')}`
   });
 }
 
@@ -154,7 +156,13 @@ async function handleScheduleRemove(req, res) {
     return res.status(400).json({ error: 'User ID required' });
   }
 
+  // ファイルから削除
+  const schedules = getAllSubscriptions();
   const deleted = schedules.delete(userId);
+  if (deleted) {
+    // 変更をファイルに保存
+    saveSubscriptions(schedules);
+  }
 
   return res.status(200).json({
     success: true,
