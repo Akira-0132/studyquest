@@ -1,12 +1,12 @@
 // 簡易ファイルベースストレージ（Vercel対応）
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 const STORAGE_DIR = '/tmp';
 const SUBSCRIPTIONS_FILE = path.join(STORAGE_DIR, 'subscriptions.json');
 
 // 購読情報を保存
-function saveSubscriptions(subscriptions) {
+export function saveSubscriptions(subscriptions) {
   try {
     const data = JSON.stringify(Array.from(subscriptions.entries()), null, 2);
     fs.writeFileSync(SUBSCRIPTIONS_FILE, data);
@@ -17,7 +17,7 @@ function saveSubscriptions(subscriptions) {
 }
 
 // 購読情報を読み込み
-function loadSubscriptions() {
+export function loadSubscriptions() {
   try {
     if (fs.existsSync(SUBSCRIPTIONS_FILE)) {
       const data = fs.readFileSync(SUBSCRIPTIONS_FILE, 'utf8');
@@ -36,7 +36,7 @@ function loadSubscriptions() {
 // 環境変数を使ったより永続的なストレージ（Vercel KV代替）
 const STORAGE_KEY_PREFIX = 'STUDYQUEST_SUB_';
 
-function saveSubscriptionToEnv(userKey, userData) {
+export function saveSubscriptionToEnv(userKey, userData) {
   // 実際にはVercel KVやPlanetScaleなどの外部ストレージを使用すべき
   // ここでは一時的にローカルファイルを使用
   try {
@@ -50,7 +50,7 @@ function saveSubscriptionToEnv(userKey, userData) {
   }
 }
 
-function getSubscriptionFromEnv(userKey) {
+export function getSubscriptionFromEnv(userKey) {
   try {
     const subscriptions = loadSubscriptions();
     return subscriptions.get(userKey) || null;
@@ -60,7 +60,7 @@ function getSubscriptionFromEnv(userKey) {
   }
 }
 
-function getAllSubscriptions() {
+export function getAllSubscriptions() {
   try {
     return loadSubscriptions();
   } catch (error) {
@@ -69,10 +69,3 @@ function getAllSubscriptions() {
   }
 }
 
-module.exports = {
-  saveSubscriptions,
-  loadSubscriptions,
-  saveSubscriptionToEnv,
-  getSubscriptionFromEnv,
-  getAllSubscriptions
-};

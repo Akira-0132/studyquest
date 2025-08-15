@@ -9,9 +9,9 @@ webpush.setVapidDetails(
 );
 
 // ファイルベースストレージをインポート
-const { saveSubscriptionToEnv, getAllSubscriptions, saveSubscriptions } = require('./storage.js');
+import { saveSubscriptionToEnv, getAllSubscriptions, saveSubscriptions } from './storage.js';
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   // CORS設定
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');

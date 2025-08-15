@@ -9,9 +9,9 @@ webpush.setVapidDetails(
 );
 
 // ファイルベースストレージをインポート
-const { getAllSubscriptions } = require('./storage.js');
+import { getAllSubscriptions } from './storage.js';
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   // Vercel Cronからのリクエストかチェック
   const authHeader = req.headers['authorization'];
   const isFromCron = authHeader === `Bearer ${process.env.CRON_SECRET}`;
