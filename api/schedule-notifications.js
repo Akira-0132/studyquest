@@ -9,7 +9,8 @@ webpush.setVapidDetails(
 );
 
 // 簡易的なスケジュールストレージ（本格実装はデータベース使用）
-const schedules = new Map();
+// グローバルに共有するためexport  
+export const schedules = new Map();
 
 export default async function handler(req, res) {
   // CORS設定

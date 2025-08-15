@@ -9,7 +9,8 @@ webpush.setVapIDDetails(
 );
 
 // 簡易的な購読情報ストレージ（本格実装はデータベース使用）
-const subscriptions = new Map();
+// グローバルに共有するためexport
+export const subscriptions = new Map();
 
 export default async function handler(req, res) {
   // CORS設定

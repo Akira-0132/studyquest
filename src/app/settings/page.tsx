@@ -159,6 +159,43 @@ export default function SettingsPage() {
     }
   };
 
+  // スケジュール通知を手動でトリガー（テスト用）
+  const triggerScheduledNotification = async (timeType: string) => {
+    addDebugLog(`⏰ ${timeType}のスケジュール通知をトリガー中...`);
+    
+    try {
+      const subscription = await getActiveSubscription();
+      if (!subscription) {
+        addDebugLog('❌ アクティブな購読がありません');
+        alert('先に通知を有効にしてください');
+        return;
+      }
+
+      const response = await fetch('/api/trigger-scheduled-notification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subscription: subscription.toJSON(),
+          timeType: timeType
+        })
+      });
+
+      const result = await response.json();
+      
+      if (response.ok) {
+        addDebugLog(`✅ ${timeType}のスケジュール通知送信成功`);
+        alert(`${timeType}のスケジュール通知を送信しました！\\n\\nこれは実際の時刻に送信される通知と同じものです。`);
+      } else {
+        addDebugLog(`❌ スケジュール通知送信失敗: ${result.error}`);
+        alert('スケジュール通知の送信に失敗しました。');
+      }
+    } catch (error) {
+      addDebugLog(`❌ スケジュール通知エラー: ${error}`);
+    }
+  };
+
   // 通知無効化
   const disableBackgroundNotifications = async () => {
     addDebugLog('🔕 バックグラウンド通知無効化中...');
@@ -276,6 +313,32 @@ export default function SettingsPage() {
                     >
                       🧪 テスト通知を送信
                     </button>
+                    
+                    <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/30 rounded-lg">
+                      <p className="text-xs text-yellow-800 dark:text-yellow-200 mb-2">
+                        📍 スケジュール通知テスト（即座に送信）
+                      </p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          onClick={() => triggerScheduledNotification('morning')}
+                          className="bg-yellow-600 hover:bg-yellow-700 text-white text-xs py-1 px-2 rounded"
+                        >
+                          🌅 朝
+                        </button>
+                        <button
+                          onClick={() => triggerScheduledNotification('afternoon')}
+                          className="bg-orange-600 hover:bg-orange-700 text-white text-xs py-1 px-2 rounded"
+                        >
+                          📚 午後
+                        </button>
+                        <button
+                          onClick={() => triggerScheduledNotification('evening')}
+                          className="bg-purple-600 hover:bg-purple-700 text-white text-xs py-1 px-2 rounded"
+                        >
+                          🌙 夜
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
