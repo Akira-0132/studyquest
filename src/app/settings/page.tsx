@@ -65,7 +65,7 @@ export default function SettingsPage() {
         
         if (enabled) {
           // 通知を有効にした場合、スケジューリングを開始
-          scheduleLocalNotifications();
+          await scheduleLocalNotifications();
           // テスト通知を表示
           setTimeout(() => {
             testNotification();
@@ -83,14 +83,14 @@ export default function SettingsPage() {
     }
   };
 
-  const updateNotificationTime = (type: string, time: string) => {
+  const updateNotificationTime = async (type: string, time: string) => {
     const newSettings = { ...notificationSettings, [type]: time };
     setNotificationSettings(newSettings);
     localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
     
     // 設定変更時に通知を再スケジュール
     if (newSettings.enabled) {
-      scheduleLocalNotifications();
+      await scheduleLocalNotifications();
     }
   };
 
