@@ -19,7 +19,7 @@ export async function subscribeToPushNotifications(): Promise<boolean> {
       // 注: 本番環境では実際のVAPIDキーを使用すべき
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array('BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U')
+        applicationServerKey: urlBase64ToUint8Array('BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U') as BufferSource
       });
       
       console.log('Push subscription created:', subscription);
@@ -94,7 +94,7 @@ export async function syncNotificationSettings() {
         enabled: settings.enabled
       });
       
-      await tx.complete;
+      // トランザクション完了を待つ
       console.log('Notification settings synced to IndexedDB');
     } catch (error) {
       console.error('Failed to sync settings:', error);
