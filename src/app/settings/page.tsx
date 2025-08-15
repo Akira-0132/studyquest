@@ -42,6 +42,12 @@ export default function SettingsPage() {
         enabled: Notification.permission === 'granted',
       }));
     }
+
+    // PWA状態をチェック
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches;
+    if (!isPWA && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
+      console.log('iPhoneでPWAではない状態で実行中');
+    }
   }, []);
 
   const requestNotificationPermission = async () => {
@@ -73,7 +79,7 @@ export default function SettingsPage() {
         alert(`エラーが発生しました: ${error}`);
       }
     } else {
-      alert('このブラウザは通知をサポートしていません。');
+      alert('このブラウザは通知をサポートしていません。\n\niPhoneの場合：\n1. Safariを使用してください\n2. 「ホーム画面に追加」でPWAとしてインストールしてください\n3. iOS 16.4以降が必要です');
     }
   };
 
