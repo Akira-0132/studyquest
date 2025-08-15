@@ -184,6 +184,36 @@ export default function SettingsPage() {
     alert('OneSignal通知設定を更新しました。\n\n設定した時刻に通知が届きます。');
   };
 
+  // 直接ブラウザ権限をリクエスト
+  const requestDirectBrowserPermission = async () => {
+    addDebugLog('🔔 ブラウザ権限を直接リクエスト中...');
+    
+    if (!('Notification' in window)) {
+      addDebugLog('❌ このブラウザは通知をサポートしていません');
+      return;
+    }
+    
+    try {
+      const permission = await Notification.requestPermission();
+      addDebugLog(`📋 ブラウザ権限結果: ${permission}`);
+      
+      if (permission === 'granted') {
+        addDebugLog('✅ ブラウザ権限が許可されました！');
+        // 権限が取得できた場合は状態を更新
+        setTimeout(async () => {
+          const newState = await getOneSignalPermissionState();
+          const newSettings = { ...notificationSettings, enabled: newState };
+          setNotificationSettings(newSettings);
+          localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
+        }, 1000);
+      } else {
+        addDebugLog('❌ ブラウザ権限が拒否されました');
+      }
+    } catch (error) {
+      addDebugLog(`❌ ブラウザ権限エラー: ${error}`);
+    }
+  };
+
   // iPhone専用の詳細診断機能
   const runIOSDetailedDiagnostics = async () => {
     const isPWA = window.matchMedia('(display-mode: standalone)').matches;
@@ -197,6 +227,10 @@ export default function SettingsPage() {
     addDebugLog(`🖥️ PWAモード: ${isPWA}`);
     addDebugLog(`🔔 通知API: ${notificationSupport}`);
     addDebugLog(`✅ ブラウザ権限: ${permission}`);
+    
+    // OneSignal App ID確認
+    const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
+    addDebugLog(`🔑 App ID: ${appId ? appId.substring(0, 8) + '...' : '未設定'}`);
     
     // OneSignalの状態チェック
     try {
@@ -510,6 +544,12 @@ ${permission !== 'granted' ? '⚠️ 通知許可が必要です' : ''}
                 className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
               >
                 📱 iPhone詳細診断実行
+              </button>
+              <button
+                onClick={requestDirectBrowserPermission}
+                className="w-full px-4 py-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors"
+              >
+                🔔 ブラウザ権限を直接リクエスト
               </button>
               <button
                 onClick={() => setShowDebugPanel(!showDebugPanel)}
