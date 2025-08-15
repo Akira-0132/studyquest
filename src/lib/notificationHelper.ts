@@ -77,8 +77,36 @@ export function scheduleLocalNotifications() {
 }
 
 export function testNotification() {
-  return showLocalNotification(
-    'StudyQuest',
-    'テスト通知です！通知が正常に動作しています。'
-  );
+  if ('Notification' in window && Notification.permission === 'granted') {
+    // より確実な通知実装
+    try {
+      const notification = new Notification('StudyQuest テスト通知', {
+        body: '🎉 通知が正常に動作しています！この通知が見えれば成功です。',
+        icon: '/icon-192x192.png',
+        badge: '/icon-96x96.png',
+        tag: 'test-notification',
+        requireInteraction: true, // ユーザーが操作するまで残る
+      } as any);
+
+      // クリック時の動作
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+
+      // 10秒後に自動で閉じる
+      setTimeout(() => {
+        notification.close();
+      }, 10000);
+
+      console.log('テスト通知を送信しました');
+      return notification;
+    } catch (error) {
+      console.error('テスト通知の送信に失敗:', error);
+      alert(`通知送信エラー: ${error}`);
+    }
+  } else {
+    alert('通知が許可されていません');
+  }
+  return null;
 }

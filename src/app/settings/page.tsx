@@ -99,7 +99,27 @@ export default function SettingsPage() {
       alert('まず通知を有効にしてください。');
       return;
     }
-    testNotification();
+    
+    console.log('テスト通知を実行中...');
+    const result = testNotification();
+    
+    if (result) {
+      alert('テスト通知を送信しました！\n\n通知が表示されない場合は：\n1. iPhoneの設定 → 通知でStudyQuestが許可されているか確認\n2. おやすみモードが有効でないか確認\n3. アプリを一度バックグラウンドにしてみてください');
+    }
+  };
+
+  // 5秒後にテスト通知を送る機能
+  const handleDelayedTest = () => {
+    if (!notificationSettings.enabled) {
+      alert('まず通知を有効にしてください。');
+      return;
+    }
+    
+    alert('5秒後にテスト通知を送信します。\nアプリをバックグラウンドにして待ってください。');
+    
+    setTimeout(() => {
+      testNotification();
+    }, 5000);
   };
 
   const resetProgress = () => {
@@ -167,12 +187,18 @@ export default function SettingsPage() {
               {notificationSettings.enabled && (
                 <>
                   <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                    <div className="mb-3">
+                    <div className="mb-3 space-y-2">
                       <button
                         onClick={handleTestNotification}
                         className="w-full px-3 py-2 bg-indigo-500 text-white rounded-lg text-sm font-medium hover:bg-indigo-600 transition-colors"
                       >
-                        📢 テスト通知を送信
+                        📢 即座にテスト通知
+                      </button>
+                      <button
+                        onClick={handleDelayedTest}
+                        className="w-full px-3 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
+                      >
+                        ⏱️ 5秒後にテスト通知
                       </button>
                     </div>
                     <div className="space-y-3">
