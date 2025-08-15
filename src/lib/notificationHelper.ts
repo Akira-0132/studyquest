@@ -110,3 +110,35 @@ export function testNotification() {
   }
   return null;
 }
+
+// Service Worker経由の通知テスト
+export async function testServiceWorkerNotification() {
+  if ('serviceWorker' in navigator && 'Notification' in window && Notification.permission === 'granted') {
+    try {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (registration) {
+        console.log('Service Worker経由で通知を送信中...');
+        await registration.showNotification('StudyQuest SW通知', {
+          body: '🔧 Service Worker経由のテスト通知です',
+          icon: '/icon-192x192.png',
+          badge: '/icon-96x96.png',
+          tag: 'sw-test-notification',
+          requireInteraction: true,
+          vibrate: [200, 100, 200],
+        });
+        console.log('Service Worker通知が送信されました');
+        return true;
+      } else {
+        alert('Service Workerが登録されていません');
+        return false;
+      }
+    } catch (error) {
+      console.error('Service Worker通知エラー:', error);
+      alert(`Service Worker通知エラー: ${error}`);
+      return false;
+    }
+  } else {
+    alert('Service Worker または通知がサポートされていません');
+    return false;
+  }
+}

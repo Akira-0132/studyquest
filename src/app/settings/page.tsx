@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { BackButton } from '@/components/BackButton';
 import { ClientOnly } from '@/components/ClientOnly';
 import { getUserData, updateUserData } from '@/lib/streakManager';
-import { scheduleLocalNotifications, testNotification } from '@/lib/notificationHelper';
+import { scheduleLocalNotifications, testNotification, testServiceWorkerNotification } from '@/lib/notificationHelper';
 
 export default function SettingsPage() {
   const [notificationSettings, setNotificationSettings] = useState({
@@ -120,6 +120,20 @@ export default function SettingsPage() {
     setTimeout(() => {
       testNotification();
     }, 5000);
+  };
+
+  // Service Worker通知テスト
+  const handleServiceWorkerTest = async () => {
+    if (!notificationSettings.enabled) {
+      alert('まず通知を有効にしてください。');
+      return;
+    }
+    
+    alert('Service Worker経由の通知をテストします。\nアプリをバックグラウンドにしてください。');
+    
+    setTimeout(async () => {
+      await testServiceWorkerNotification();
+    }, 2000);
   };
 
   // 詳細診断機能
@@ -243,6 +257,12 @@ ${permission !== 'granted' ? '⚠️ 通知許可が必要です' : ''}
                         className="w-full px-3 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
                       >
                         ⏱️ 5秒後にテスト通知
+                      </button>
+                      <button
+                        onClick={handleServiceWorkerTest}
+                        className="w-full px-3 py-2 bg-purple-500 text-white rounded-lg text-sm font-medium hover:bg-purple-600 transition-colors"
+                      >
+                        🔧 Service Worker通知テスト
                       </button>
                       <button
                         onClick={runDiagnostics}
