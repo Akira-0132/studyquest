@@ -266,8 +266,21 @@ export default function SettingsPage() {
       addDebugLog('✅ OneSignal手動初期化完了');
       
       // 初期化後の状態確認
-      const permission = await window.OneSignal.getNotificationPermission();
-      const subscribed = await window.OneSignal.isPushNotificationsEnabled();
+      let permission = 'unknown';
+      let subscribed = false;
+      
+      try {
+        permission = await window.OneSignal.getNotificationPermission();
+      } catch (e) {
+        addDebugLog(`❌ 権限チェックエラー: ${e}`);
+      }
+      
+      try {
+        subscribed = await window.OneSignal.isPushNotificationsEnabled();
+      } catch (e) {
+        addDebugLog(`❌ 購読チェックエラー: ${e}`);
+      }
+      
       addDebugLog(`📋 初期化後権限: ${permission}`);
       addDebugLog(`📋 初期化後購読: ${subscribed}`);
       
@@ -336,9 +349,22 @@ export default function SettingsPage() {
       addDebugLog(`🔄 OneSignal初期化: ${oneSignalReady}`);
       
       if (oneSignalReady && window.OneSignal) {
-        const osPermission = await window.OneSignal.getNotificationPermission();
-        const osSubscribed = await window.OneSignal.isPushNotificationsEnabled();
+        let osPermission = 'unknown';
+        let osSubscribed = false;
         let osSupported = false;
+        
+        try {
+          osPermission = await window.OneSignal.getNotificationPermission();
+        } catch (e) {
+          addDebugLog(`❌ OneSignal権限取得エラー: ${e}`);
+        }
+        
+        try {
+          osSubscribed = await window.OneSignal.isPushNotificationsEnabled();
+        } catch (e) {
+          addDebugLog(`❌ OneSignal購読取得エラー: ${e}`);
+        }
+        
         try {
           osSupported = typeof window.OneSignal.getNotificationPermission === 'function';
         } catch (e) {

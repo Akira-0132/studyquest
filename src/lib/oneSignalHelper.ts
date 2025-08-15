@@ -227,7 +227,13 @@ export async function getOneSignalPermissionState(): Promise<boolean> {
 
   try {
     const permission = await window.OneSignal.getNotificationPermission();
-    const isSubscribed = await window.OneSignal.isPushNotificationsEnabled();
+    let isSubscribed = false;
+    try {
+      isSubscribed = await window.OneSignal.isPushNotificationsEnabled();
+    } catch (subError) {
+      console.log('isPushNotificationsEnabled not available:', subError);
+      isSubscribed = false;
+    }
     const result = permission === 'granted' && isSubscribed;
     
     console.log('📊 OneSignal permission details:', {

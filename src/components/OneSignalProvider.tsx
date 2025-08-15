@@ -86,7 +86,13 @@ export function OneSignalProvider({ children }: { children: React.ReactNode }) {
           }
           console.log('OneSignal methods available:', isPushSupported);
           
-          const isPushEnabled = await OneSignal.isPushNotificationsEnabled();
+          let isPushEnabled = false;
+          try {
+            isPushEnabled = await OneSignal.isPushNotificationsEnabled();
+          } catch (e) {
+            console.log('isPushNotificationsEnabled error:', e);
+            isPushEnabled = false;
+          }
           console.log('Push notifications enabled:', isPushEnabled);
           
           // 権限状態の確認
