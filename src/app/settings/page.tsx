@@ -10,7 +10,8 @@ import {
   updateOneSignalNotificationSettings, 
   sendOneSignalTestNotification,
   toggleOneSignalNotifications,
-  getOneSignalPermissionState
+  getOneSignalPermissionState,
+  isOneSignalInitialized
 } from '@/lib/oneSignalHelper';
 
 export default function SettingsPage() {
