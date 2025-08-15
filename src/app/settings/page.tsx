@@ -338,7 +338,12 @@ export default function SettingsPage() {
       if (oneSignalReady && window.OneSignal) {
         const osPermission = await window.OneSignal.getNotificationPermission();
         const osSubscribed = await window.OneSignal.isPushNotificationsEnabled();
-        const osSupported = await window.OneSignal.isPushNotificationsSupported();
+        let osSupported = false;
+        try {
+          osSupported = typeof window.OneSignal.getNotificationPermission === 'function';
+        } catch (e) {
+          osSupported = false;
+        }
         
         addDebugLog(`📋 OneSignal権限: ${osPermission}`);
         addDebugLog(`📋 OneSignal購読: ${osSubscribed}`);

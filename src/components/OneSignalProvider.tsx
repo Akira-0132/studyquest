@@ -77,9 +77,14 @@ export function OneSignalProvider({ children }: { children: React.ReactNode }) {
           console.log('OneSignal init with config:', initConfig);
           await OneSignal.init(initConfig);
           
-          // デバッグ情報
-          const isPushSupported = await OneSignal.isPushNotificationsSupported();
-          console.log('Push notifications supported:', isPushSupported);
+          // デバッグ情報（安全な方法でチェック）
+          let isPushSupported = false;
+          try {
+            isPushSupported = typeof OneSignal.getNotificationPermission === 'function';
+          } catch (e) {
+            isPushSupported = false;
+          }
+          console.log('OneSignal methods available:', isPushSupported);
           
           const isPushEnabled = await OneSignal.isPushNotificationsEnabled();
           console.log('Push notifications enabled:', isPushEnabled);
