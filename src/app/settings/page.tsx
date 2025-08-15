@@ -13,6 +13,14 @@ import {
   getOneSignalPermissionState,
   isOneSignalInitialized
 } from '@/lib/oneSignalHelper';
+import {
+  subscribeToPush,
+  unsubscribeFromPush,
+  sendTestNotification,
+  getPushPermissionState,
+  getActiveSubscription,
+  scheduleNotifications
+} from '@/lib/nativePushManager';
 
 export default function SettingsPage() {
   const [notificationSettings, setNotificationSettings] = useState({
@@ -62,6 +70,97 @@ export default function SettingsPage() {
       console.error = originalError;
     };
   }, []);
+
+  // 🚀 ネイティブプッシュ通知システム
+  const setupNativePushNotifications = async () => {
+    addDebugLog('🚀 ネイティブプッシュ通知セットアップ開始...');
+    
+    try {
+      // 権限リクエスト
+      const permission = await Notification.requestPermission();
+      addDebugLog(`📋 通知権限結果: ${permission}`);
+      
+      if (permission !== 'granted') {
+        addDebugLog('❌ 通知権限が拒否されました');
+        alert('通知権限が必要です。ブラウザの設定で許可してください。');
+        return false;
+      }
+      
+      // プッシュ購読
+      const subscription = await subscribeToPush();
+      if (!subscription) {
+        addDebugLog('❌ プッシュ購読に失敗');
+        return false;
+      }
+      
+      addDebugLog('✅ プッシュ購読成功');
+      
+      // スケジュール設定
+      const success = await scheduleNotifications(notificationSettings);
+      if (success) {
+        addDebugLog('✅ スケジュール通知設定完了');
+        
+        // 状態更新
+        const newSettings = { ...notificationSettings, enabled: true };
+        setNotificationSettings(newSettings);
+        localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
+        
+        alert('🎉 バックグラウンド通知が設定されました！\n\nアプリが閉じていても指定時刻に通知が届きます。');
+        return true;
+      } else {
+        addDebugLog('❌ スケジュール設定に失敗');
+        return false;
+      }
+      
+    } catch (error) {
+      addDebugLog(`❌ ネイティブプッシュエラー: ${error}`);
+      return false;
+    }
+  };
+
+  // ネイティブテスト通知
+  const sendNativeTestNotification = async () => {
+    addDebugLog('🧪 ネイティブテスト通知送信中...');
+    
+    try {
+      const success = await sendTestNotification(
+        '🚀 StudyQuest テスト通知',
+        'バックグラウンド通知が正常に動作しています！アプリを閉じても通知が届きます。'
+      );
+      
+      if (success) {
+        addDebugLog('✅ ネイティブテスト通知送信成功');
+        alert('テスト通知を送信しました！\n\nアプリをバックグラウンドにしても通知が届くことを確認してください。');
+      } else {
+        addDebugLog('❌ ネイティブテスト通知送信失敗');
+        alert('テスト通知の送信に失敗しました。');
+      }
+    } catch (error) {
+      addDebugLog(`❌ ネイティブテスト通知エラー: ${error}`);
+    }
+  };
+
+  // ネイティブ通知無効化
+  const disableNativePushNotifications = async () => {
+    addDebugLog('🔕 ネイティブプッシュ通知無効化中...');
+    
+    try {
+      const success = await unsubscribeFromPush();
+      if (success) {
+        addDebugLog('✅ ネイティブプッシュ通知無効化完了');
+        
+        const newSettings = { ...notificationSettings, enabled: false };
+        setNotificationSettings(newSettings);
+        localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
+        
+        alert('🔕 バックグラウンド通知を無効にしました。');
+      } else {
+        addDebugLog('❌ ネイティブプッシュ通知無効化失敗');
+      }
+    } catch (error) {
+      addDebugLog(`❌ ネイティブプッシュ無効化エラー: ${error}`);
+    }
+  };
 
   useEffect(() => {
     // ユーザーデータを読み込み
@@ -661,6 +760,41 @@ ${permission !== 'granted' ? '⚠️ 通知許可が必要です' : ''}
               </div>
             </div>
           )}
+
+          {/* 🚀 ネイティブバックグラウンド通知システム */}
+          <div className="bg-green-50 dark:bg-green-900/20 rounded-2xl p-6 shadow-lg">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              🚀 バックグラウンド通知（推奨）
+            </h3>
+            <div className="space-y-3">
+              {!notificationSettings.enabled ? (
+                <button
+                  onClick={setupNativePushNotifications}
+                  className="w-full px-4 py-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors"
+                >
+                  🔔 バックグラウンド通知を有効化
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={sendNativeTestNotification}
+                    className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
+                  >
+                    🧪 バックグラウンド通知テスト
+                  </button>
+                  <button
+                    onClick={disableNativePushNotifications}
+                    className="w-full px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors"
+                  >
+                    🔕 バックグラウンド通知を無効化
+                  </button>
+                </>
+              )}
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-3">
+              ※OneSignalに依存しない確実なバックグラウンド通知システムです
+            </p>
+          </div>
 
           {/* iPhoneデバッグパネル */}
           <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-2xl p-6 shadow-lg">
