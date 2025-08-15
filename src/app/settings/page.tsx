@@ -184,6 +184,69 @@ export default function SettingsPage() {
     alert('OneSignal通知設定を更新しました。\n\n設定した時刻に通知が届きます。');
   };
 
+  // OneSignalの手動初期化を試行
+  const forceOneSignalInit = async () => {
+    addDebugLog('🔄 OneSignalの手動初期化を開始...');
+    
+    try {
+      // OneSignalオブジェクトの存在確認
+      addDebugLog(`🔍 window.OneSignal: ${window.OneSignal ? '存在' : '未定義'}`);
+      
+      if (!window.OneSignal) {
+        addDebugLog('❌ OneSignal SDKが読み込まれていません');
+        
+        // SDKの再読み込みを試行
+        addDebugLog('🔄 OneSignal SDKの再読み込みを試行...');
+        const script = document.createElement('script');
+        script.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
+        script.onload = () => addDebugLog('✅ OneSignal SDK再読み込み完了');
+        script.onerror = () => addDebugLog('❌ OneSignal SDK再読み込み失敗');
+        document.head.appendChild(script);
+        
+        return;
+      }
+      
+      // App ID確認
+      const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
+      addDebugLog(`🔑 使用するApp ID: ${appId ? appId.substring(0, 8) + '...' : '未設定'}`);
+      
+      if (!appId) {
+        addDebugLog('❌ OneSignal App IDが設定されていません');
+        return;
+      }
+      
+      // 初期化状態確認
+      const isInitialized = await window.OneSignal.isPushNotificationsSupported();
+      addDebugLog(`📋 Push対応: ${isInitialized}`);
+      
+      // 手動で初期化設定を実行
+      const initConfig = {
+        appId: appId,
+        allowLocalhostAsSecureOrigin: true,
+        serviceWorkerPath: "/OneSignalSDKWorker.js",
+        serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
+        notifyButton: { enable: false },
+        promptOptions: {
+          native: { enabled: true, autoPrompt: false }
+        }
+      };
+      
+      addDebugLog('🔧 OneSignal手動初期化実行中...');
+      await window.OneSignal.init(initConfig);
+      addDebugLog('✅ OneSignal手動初期化完了');
+      
+      // 初期化後の状態確認
+      const permission = await window.OneSignal.getNotificationPermission();
+      const subscribed = await window.OneSignal.isPushNotificationsEnabled();
+      addDebugLog(`📋 初期化後権限: ${permission}`);
+      addDebugLog(`📋 初期化後購読: ${subscribed}`);
+      
+    } catch (error) {
+      addDebugLog(`❌ OneSignal手動初期化エラー: ${error}`);
+      addDebugLog(`❌ エラー詳細: ${JSON.stringify(error)}`);
+    }
+  };
+
   // 直接ブラウザ権限をリクエスト
   const requestDirectBrowserPermission = async () => {
     addDebugLog('🔔 ブラウザ権限を直接リクエスト中...');
@@ -199,13 +262,18 @@ export default function SettingsPage() {
       
       if (permission === 'granted') {
         addDebugLog('✅ ブラウザ権限が許可されました！');
-        // 権限が取得できた場合は状態を更新
+        
+        // 権限取得後にOneSignalの初期化を再試行
+        addDebugLog('🔄 権限取得後のOneSignal初期化を試行...');
+        await forceOneSignalInit();
+        
+        // 状態を更新
         setTimeout(async () => {
           const newState = await getOneSignalPermissionState();
           const newSettings = { ...notificationSettings, enabled: newState };
           setNotificationSettings(newSettings);
           localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
-        }, 1000);
+        }, 2000);
       } else {
         addDebugLog('❌ ブラウザ権限が拒否されました');
       }
@@ -550,6 +618,12 @@ ${permission !== 'granted' ? '⚠️ 通知許可が必要です' : ''}
                 className="w-full px-4 py-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors"
               >
                 🔔 ブラウザ権限を直接リクエスト
+              </button>
+              <button
+                onClick={forceOneSignalInit}
+                className="w-full px-4 py-3 bg-purple-500 text-white rounded-lg font-medium hover:bg-purple-600 transition-colors"
+              >
+                🔧 OneSignal手動初期化
               </button>
               <button
                 onClick={() => setShowDebugPanel(!showDebugPanel)}
