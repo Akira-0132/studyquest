@@ -6,6 +6,7 @@ import { BackButton } from '@/components/BackButton';
 import { ClientOnly } from '@/components/ClientOnly';
 import { getUserData, updateUserData } from '@/lib/streakManager';
 import { scheduleLocalNotifications, testScheduledNotification, testServiceWorkerNotification } from '@/lib/notificationHelper';
+import { requestNotificationPermission, subscribeToPushNotifications } from '@/lib/pushNotificationManager';
 
 export default function SettingsPage() {
   const [notificationSettings, setNotificationSettings] = useState({
@@ -50,11 +51,11 @@ export default function SettingsPage() {
     }
   }, []);
 
-  const requestNotificationPermission = async () => {
+  const handleNotificationPermission = async () => {
     if ('Notification' in window) {
       try {
         console.log('現在の通知許可状態:', Notification.permission);
-        const permission = await Notification.requestPermission();
+        const permission = await requestNotificationPermission();
         console.log('リクエスト後の通知許可状態:', permission);
         
         const enabled = permission === 'granted';
@@ -64,11 +65,13 @@ export default function SettingsPage() {
         localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
         
         if (enabled) {
+          // Push通知を購読
+          await subscribeToPushNotifications();
           // 通知を有効にした場合、スケジューリングを開始
           await scheduleLocalNotifications();
           // テスト通知を即座に表示
           await scheduleLocalNotifications(true);
-          alert('通知が有効になりました！\n\n指定時刻に通知が届きます。');
+          alert('通知が有効になりました！\n\n指定時刻に通知が届きます。\nバックグラウンドでも動作します。');
         } else {
           alert(`通知許可が拒否されました。状態: ${permission}\nブラウザの設定から手動で許可してください。`);
         }
@@ -206,7 +209,7 @@ ${permission !== 'granted' ? '⚠️ 通知許可が必要です' : ''}
               <div className="flex items-center justify-between">
                 <span className="text-gray-700 dark:text-gray-300">プッシュ通知</span>
                 <button
-                  onClick={requestNotificationPermission}
+                  onClick={handleNotificationPermission}
                   className={`px-4 py-2 rounded-lg font-medium ${
                     notificationSettings.enabled
                       ? 'bg-green-500 text-white'

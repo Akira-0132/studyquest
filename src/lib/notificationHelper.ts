@@ -1,17 +1,13 @@
-// Service Workerにメッセージを送信
-async function sendMessageToSW(message: any) {
-  if ('serviceWorker' in navigator) {
-    const registration = await navigator.serviceWorker.ready;
-    const controller = navigator.serviceWorker.controller;
-    if (controller) {
-      controller.postMessage(message);
-      return true;
-    }
-  }
-  return false;
-}
+import { 
+  subscribeToPushNotifications, 
+  syncNotificationSettings, 
+  sendTestNotification as sendPushTestNotification,
+  scheduleNotifications as schedulePushNotifications,
+  requestNotificationPermission as requestPushPermission,
+  updateServiceWorker
+} from './pushNotificationManager';
 
-// MVP版の通知ヘルパー関数
+// レガシー通知機能（後方互換性のため残す）
 export function showLocalNotification(title: string, body: string, options?: NotificationOptions) {
   if ('Notification' in window && Notification.permission === 'granted') {
     const notificationOptions: any = {
@@ -24,107 +20,76 @@ export function showLocalNotification(title: string, body: string, options?: Not
     };
     
     const notification = new Notification(title, notificationOptions);
-
-    // 3秒後に自動で閉じる
+    
     setTimeout(() => {
       notification.close();
     }, 3000);
-
-    // クリック時にアプリを開く
+    
     notification.onclick = () => {
       window.focus();
       notification.close();
     };
-
+    
     return notification;
   }
   return null;
 }
 
-// 定期通知のスケジューリング（Service Worker経由）
+// 定期通知のスケジューリング（Web Push API版）
 export async function scheduleLocalNotifications(testMode: boolean = false) {
-  if (!('serviceWorker' in navigator) || !('Notification' in window) || Notification.permission !== 'granted') {
+  console.log('Scheduling notifications...', { testMode });
+  
+  if (!('serviceWorker' in navigator) || !('Notification' in window)) {
     console.log('通知機能が利用できません');
     return;
   }
-
-  const settings = JSON.parse(localStorage.getItem('studyquest_notifications') || '{}');
   
-  if (!settings.enabled && !testMode) return;
-
+  const permission = await requestPushPermission();
+  if (permission !== 'granted') {
+    console.log('通知権限がありません:', permission);
+    return;
+  }
+  
   try {
-    // 既存のタイマーをクリア
-    await sendMessageToSW({ type: 'CLEAR_NOTIFICATIONS' });
-
-    // テストモードの場合、すぐにテスト通知を送信
+    // Service Workerを最新に更新
+    await updateServiceWorker();
+    
     if (testMode) {
-      const success = await sendMessageToSW({
-        type: 'NOTIFICATION_TEST',
-        message: '📱 定期通知のテストです。指定時刻になると通知が届きます。'
-      });
-      console.log('テスト通知を送信しました:', success);
+      // テストモードの場合、即座にテスト通知を送信
+      await sendPushTestNotification('📱 定期通知のテストです。設定した時刻に通知が届きます。');
       return;
     }
-
-    const now = new Date();
-    const messages = [
-      { time: settings.morning || '07:00', message: 'おはよう！今日も頑張ろう！🌅' },
-      { time: settings.afternoon || '16:00', message: '学校お疲れさま！勉強始めよう📚' },
-      { time: settings.evening || '20:00', message: 'ラストスパート！もう少し！💪' },
-    ];
-
-    // 各通知をService Workerにスケジュール
-    for (const { time, message } of messages) {
-      const [hours, minutes] = time.split(':').map(Number);
-      const scheduledTime = new Date();
-      scheduledTime.setHours(hours, minutes, 0, 0);
-      
-      // 今日の時刻が過ぎていれば明日にスケジュール
-      if (scheduledTime <= now) {
-        scheduledTime.setDate(scheduledTime.getDate() + 1);
-      }
-      
-      const delay = scheduledTime.getTime() - now.getTime();
-      console.log(`通知をスケジュール: ${time} - ${message} (${Math.floor(delay / 1000 / 60)}分後)`);
-      
-      // 24時間以内のもののみスケジュール
-      if (delay > 0 && delay <= 24 * 60 * 60 * 1000) {
-        await sendMessageToSW({
-          type: 'SCHEDULE_NOTIFICATION',
-          delay: delay,
-          message: message
-        });
-      }
-    }
     
-    console.log('定期通知のスケジューリングが完了しました');
+    // Push通知をスケジュール
+    await schedulePushNotifications();
+    
+    console.log('通知のスケジューリングが完了しました');
   } catch (error) {
-    console.error('定期通知のスケジューリングに失敗:', error);
+    console.error('通知のスケジューリングに失敗:', error);
   }
 }
 
-// 1分後に通知を送信するテスト機能（Service Worker経由）
+// 1分後に通知を送信するテスト機能
 export async function testScheduledNotification() {
-  if (!('serviceWorker' in navigator) || !('Notification' in window) || Notification.permission !== 'granted') {
+  if (!('serviceWorker' in navigator) || !('Notification' in window)) {
     alert('通知機能が利用できません');
     return false;
   }
-
+  
+  const permission = await requestPushPermission();
+  if (permission !== 'granted') {
+    alert('通知権限がありません');
+    return false;
+  }
+  
   try {
-    const delay = 60 * 1000; // 60秒
-    console.log('1分後に通知を送信します');
+    // 1分後のテスト通知をスケジュール
+    setTimeout(async () => {
+      await sendPushTestNotification('⏰ 1分後の定期通知テストです！バックグラウンドでも届きます。');
+    }, 60 * 1000);
     
-    const success = await sendMessageToSW({
-      type: 'SCHEDULE_NOTIFICATION',
-      delay: delay,
-      message: '⏰ 1分後の定期通知テストです！バックグラウンドでも届きます。'
-    });
-    
-    if (success) {
-      console.log('1分後のテスト通知をスケジュールしました');
-    }
-    
-    return success;
+    console.log('1分後のテスト通知をスケジュールしました');
+    return true;
   } catch (error) {
     console.error('テスト通知のスケジューリングに失敗:', error);
     alert(`エラー: ${error}`);
@@ -132,29 +97,21 @@ export async function testScheduledNotification() {
   }
 }
 
-// Service Worker経由の通知テスト（即座）
+// Service Worker経由の通知テスト
 export async function testServiceWorkerNotification() {
-  if ('serviceWorker' in navigator && 'Notification' in window && Notification.permission === 'granted') {
-    try {
-      const success = await sendMessageToSW({
-        type: 'NOTIFICATION_TEST',
-        message: '🔧 Service Worker経由のテスト通知です'
-      });
-      
-      if (success) {
-        console.log('Service Worker通知が送信されました');
-        return true;
-      } else {
-        alert('Service Workerが利用できません');
-        return false;
-      }
-    } catch (error) {
-      console.error('Service Worker通知エラー:', error);
-      alert(`Service Worker通知エラー: ${error}`);
+  try {
+    const success = await sendPushTestNotification('🔧 Service Worker経由のテスト通知です');
+    
+    if (success) {
+      console.log('Service Worker通知が送信されました');
+      return true;
+    } else {
+      alert('Service Worker通知の送信に失敗しました');
       return false;
     }
-  } else {
-    alert('Service Worker または通知がサポートされていません');
+  } catch (error) {
+    console.error('Service Worker通知エラー:', error);
+    alert(`Service Worker通知エラー: ${error}`);
     return false;
   }
 }
