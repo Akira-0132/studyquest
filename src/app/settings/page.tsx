@@ -53,15 +53,16 @@ export default function SettingsPage() {
     // 少し遅延させてOneSignalの初期化を待つ
     setTimeout(checkOneSignalPermission, 1000);
 
-    // OneSignal権限変更イベントリスナー
-    const handlePermissionChange = (event: CustomEvent) => {
+    // OneSignal購読変更イベントリスナー
+    const handleSubscriptionChange = (event: CustomEvent) => {
+      console.log('Subscription change event:', event.detail);
       setNotificationSettings(prev => ({
         ...prev,
-        enabled: event.detail.enabled,
+        enabled: event.detail.subscribed,
       }));
     };
     
-    window.addEventListener('onesignal-permission-change', handlePermissionChange as any);
+    window.addEventListener('onesignal-subscription-change', handleSubscriptionChange as any);
     
     // PWA状態をチェック
     const isPWA = window.matchMedia('(display-mode: standalone)').matches;
@@ -70,7 +71,7 @@ export default function SettingsPage() {
     }
     
     return () => {
-      window.removeEventListener('onesignal-permission-change', handlePermissionChange as any);
+      window.removeEventListener('onesignal-subscription-change', handleSubscriptionChange as any);
     };
   }, []);
 
@@ -222,12 +223,22 @@ ${permission !== 'granted' ? '⚠️ 通知許可が必要です' : ''}
             </h3>
             
             {/* デバッグ情報 */}
-            {process.env.NODE_ENV === 'development' && (
-              <div className="mb-4 p-2 bg-gray-100 dark:bg-gray-700 rounded text-xs">
-                <p>OneSignal App ID: {process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ? '設定済み' : '未設定'}</p>
-                <p>通知権限: {notificationSettings.enabled ? '許可' : '未許可'}</p>
-              </div>
-            )}
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-xs">
+              <p className="text-blue-800 dark:text-blue-200 mb-1">
+                📊 通知システム状態
+              </p>
+              <p className="text-blue-600 dark:text-blue-300">
+                OneSignal: {process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ? '✅ 設定済み' : '❌ 未設定'}
+              </p>
+              <p className="text-blue-600 dark:text-blue-300">
+                通知権限: {notificationSettings.enabled ? '✅ 許可' : '⏸️ 未許可'}
+              </p>
+              {!process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID && (
+                <p className="text-red-600 dark:text-red-400 mt-2">
+                  ⚠️ Vercel環境変数にOneSignal App IDを設定してください
+                </p>
+              )}
+            </div>
             
             <div className="space-y-4">
               <div className="flex items-center justify-between">

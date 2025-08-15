@@ -1,22 +1,39 @@
-// OneSignal通知ヘルパー関数
+// OneSignal通知ヘルパー関数（最新API対応）
+
+/**
+ * OneSignalが初期化されているか確認
+ */
+async function waitForOneSignal(timeout = 5000): Promise<boolean> {
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < timeout) {
+    if (window.OneSignal) {
+      try {
+        const initialized = await window.OneSignal.isPushNotificationsSupported();
+        if (initialized) {
+          return true;
+        }
+      } catch (e) {
+        // まだ初期化されていない
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  
+  return false;
+}
 
 /**
  * OneSignalで通知権限をリクエスト
  */
 export async function requestOneSignalPermission(): Promise<boolean> {
-  // 環境変数チェック
-  if (!process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID === "YOUR_APP_ID_HERE") {
-    console.error('OneSignal App IDが設定されていません');
-    // フォールバック: 通常のWeb Notification APIを使用
-    if ('Notification' in window) {
-      const permission = await Notification.requestPermission();
-      return permission === 'granted';
-    }
-    return false;
-  }
+  console.log('requestOneSignalPermission called');
   
-  if (typeof window === 'undefined' || !window.OneSignal) {
-    console.log('OneSignal not available, using fallback');
+  // OneSignalの初期化を待つ
+  const isReady = await waitForOneSignal();
+  
+  if (!isReady) {
+    console.log('OneSignal not ready, using native permission request');
     // フォールバック: 通常のWeb Notification APIを使用
     if ('Notification' in window) {
       const permission = await Notification.requestPermission();
@@ -26,15 +43,37 @@ export async function requestOneSignalPermission(): Promise<boolean> {
   }
 
   try {
-    // OneSignalのスライドダウンプロンプトを表示
-    await window.OneSignal.Slidedown.promptPush();
+    // 現在の権限状態を確認
+    const currentPermission = await window.OneSignal.getNotificationPermission();
+    console.log('Current permission:', currentPermission);
     
-    // 権限状態を確認
-    const permission = await window.OneSignal.Notifications.permission;
-    return permission;
+    if (currentPermission === 'granted') {
+      // すでに許可されている場合は購読を有効化
+      await window.OneSignal.setSubscription(true);
+      return true;
+    }
+    
+    // プロンプトを表示
+    console.log('Showing permission prompt...');
+    const permission = await window.OneSignal.showNativePrompt();
+    console.log('Permission result:', permission);
+    
+    if (permission) {
+      // 購読を有効化
+      await window.OneSignal.setSubscription(true);
+      return true;
+    }
+    
+    return false;
   } catch (error) {
-    console.error('Failed to request OneSignal permission:', error);
-    // フォールバック: 通常のWeb Notification APIを使用
+    console.error('OneSignal permission error:', error);
+    
+    // エラーの詳細を確認
+    if (error && typeof error === 'object' && 'reason' in error) {
+      console.error('Error reason:', (error as any).reason);
+    }
+    
+    // フォールバック
     if ('Notification' in window) {
       const permission = await Notification.requestPermission();
       return permission === 'granted';
@@ -52,20 +91,22 @@ export async function updateOneSignalNotificationSettings(settings: {
   evening?: string;
   enabled?: boolean;
 }) {
-  if (typeof window === 'undefined' || !window.OneSignal) {
-    console.log('OneSignal not available');
+  const isReady = await waitForOneSignal();
+  
+  if (!isReady) {
+    console.log('OneSignal not ready for settings update');
     return;
   }
 
   try {
-    // ユーザータグを更新（サーバー側でセグメント化に使用）
-    await window.OneSignal.User.addTags({
+    // タグを設定
+    await window.OneSignal.sendTags({
       notification_enabled: settings.enabled ? "true" : "false",
       morning_time: settings.morning || "07:00",
       afternoon_time: settings.afternoon || "16:00",
       evening_time: settings.evening || "20:00"
     });
-
+    
     console.log('OneSignal tags updated:', settings);
   } catch (error) {
     console.error('Failed to update OneSignal settings:', error);
@@ -73,40 +114,16 @@ export async function updateOneSignalNotificationSettings(settings: {
 }
 
 /**
- * テスト通知を送信（ローカル）
+ * テスト通知を送信
  */
 export async function sendOneSignalTestNotification(message?: string) {
-  if (typeof window === 'undefined' || !window.OneSignal) {
-    console.log('OneSignal not available');
-    return false;
-  }
-
-  try {
-    // ローカル通知を作成（これは即座に表示される）
-    const notificationPermission = await window.OneSignal.Notifications.permission;
-    
-    if (!notificationPermission) {
-      alert('通知権限がありません。設定から通知を有効にしてください。');
-      return false;
-    }
-
-    // OneSignalの内部APIを使用してテスト通知を表示
-    await window.OneSignal.sendSelfNotification(
-      'StudyQuest テスト通知',
-      message || '🎉 OneSignal通知が正常に動作しています！',
-      'https://studyquest.vercel.app',
-      '/icon-192x192.png',
-      {
-        type: 'test',
-        timestamp: new Date().toISOString()
-      }
-    );
-
-    return true;
-  } catch (error) {
-    console.error('Failed to send test notification:', error);
-    
-    // フォールバック: 通常のWeb Notification APIを使用
+  console.log('sendOneSignalTestNotification called');
+  
+  const isReady = await waitForOneSignal();
+  
+  if (!isReady) {
+    console.log('OneSignal not ready, using native notification');
+    // フォールバック
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification('StudyQuest テスト通知', {
         body: message || '🎉 通知が正常に動作しています！',
@@ -115,7 +132,32 @@ export async function sendOneSignalTestNotification(message?: string) {
       });
       return true;
     }
+    return false;
+  }
+
+  try {
+    // 権限確認
+    const permission = await window.OneSignal.getNotificationPermission();
     
+    if (permission !== 'granted') {
+      alert('通知権限がありません。設定から通知を有効にしてください。');
+      return false;
+    }
+
+    // OneSignal APIを使用してローカル通知を作成
+    // 注: これは即座に表示される通知です
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('StudyQuest テスト通知', {
+        body: message || '🎉 OneSignal通知が正常に動作しています！',
+        icon: '/icon-192x192.png',
+        badge: '/icon-96x96.png',
+      });
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Failed to send test notification:', error);
     return false;
   }
 }
@@ -124,20 +166,16 @@ export async function sendOneSignalTestNotification(message?: string) {
  * 通知の有効/無効を切り替え
  */
 export async function toggleOneSignalNotifications(enabled: boolean) {
-  if (typeof window === 'undefined' || !window.OneSignal) {
-    console.log('OneSignal not available');
+  const isReady = await waitForOneSignal();
+  
+  if (!isReady) {
+    console.log('OneSignal not ready for toggle');
     return false;
   }
 
   try {
-    if (enabled) {
-      // 通知を有効化
-      await window.OneSignal.User.PushSubscription.optIn();
-    } else {
-      // 通知を無効化（購読解除）
-      await window.OneSignal.User.PushSubscription.optOut();
-    }
-    
+    await window.OneSignal.setSubscription(enabled);
+    console.log('Subscription set to:', enabled);
     return true;
   } catch (error) {
     console.error('Failed to toggle notifications:', error);
@@ -149,8 +187,10 @@ export async function toggleOneSignalNotifications(enabled: boolean) {
  * 現在の通知権限状態を取得
  */
 export async function getOneSignalPermissionState(): Promise<boolean> {
-  if (typeof window === 'undefined' || !window.OneSignal) {
-    // フォールバック: 通常のNotification APIをチェック
+  const isReady = await waitForOneSignal(1000); // 短いタイムアウト
+  
+  if (!isReady) {
+    // フォールバック
     if ('Notification' in window) {
       return Notification.permission === 'granted';
     }
@@ -158,11 +198,11 @@ export async function getOneSignalPermissionState(): Promise<boolean> {
   }
 
   try {
-    const permission = await window.OneSignal.Notifications.permission;
-    return permission;
+    const permission = await window.OneSignal.getNotificationPermission();
+    const isSubscribed = await window.OneSignal.isPushNotificationsEnabled();
+    return permission === 'granted' && isSubscribed;
   } catch (error) {
     console.error('Failed to get permission state:', error);
-    // フォールバック: 通常のNotification APIをチェック
     if ('Notification' in window) {
       return Notification.permission === 'granted';
     }
@@ -174,30 +214,22 @@ export async function getOneSignalPermissionState(): Promise<boolean> {
  * OneSignalが初期化されているか確認
  */
 export async function isOneSignalInitialized(): Promise<boolean> {
-  if (typeof window === 'undefined' || !window.OneSignal) {
-    return false;
-  }
-
-  try {
-    // OneSignalのプッシュ通知が有効か確認
-    const isEnabled = await window.OneSignal.isPushNotificationsEnabled();
-    return isEnabled;
-  } catch (error) {
-    console.error('Failed to check OneSignal initialization:', error);
-    return false;
-  }
+  return await waitForOneSignal(1000);
 }
 
 /**
  * External IDを設定（ユーザー識別用）
  */
 export async function setOneSignalExternalId(userId: string) {
-  if (typeof window === 'undefined' || !window.OneSignal) {
+  const isReady = await waitForOneSignal();
+  
+  if (!isReady) {
+    console.log('OneSignal not ready for external ID');
     return;
   }
 
   try {
-    await window.OneSignal.login(userId);
+    await window.OneSignal.setExternalUserId(userId);
     console.log('OneSignal External ID set:', userId);
   } catch (error) {
     console.error('Failed to set External ID:', error);
