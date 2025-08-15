@@ -1,14 +1,16 @@
 // MVP版の通知ヘルパー関数
 export function showLocalNotification(title: string, body: string, options?: NotificationOptions) {
   if ('Notification' in window && Notification.permission === 'granted') {
-    const notification = new Notification(title, {
+    const notificationOptions: any = {
       body,
       icon: '/icon-192x192.png',
       badge: '/icon-96x96.png',
       tag: 'studyquest',
       vibrate: [200, 100, 200],
       ...options,
-    });
+    };
+    
+    const notification = new Notification(title, notificationOptions);
 
     // 3秒後に自動で閉じる
     setTimeout(() => {
@@ -57,7 +59,18 @@ export function scheduleLocalNotifications() {
     // 24時間以内のもののみスケジュール
     if (delay > 0 && delay <= 24 * 60 * 60 * 1000) {
       setTimeout(() => {
-        showLocalNotification('StudyQuest', message);
+        if ('Notification' in window && Notification.permission === 'granted') {
+          const notification = new Notification('StudyQuest', {
+            body: message,
+            icon: '/icon-192x192.png',
+            badge: '/icon-96x96.png',
+            tag: 'studyquest-scheduled',
+          } as any);
+          
+          setTimeout(() => {
+            notification.close();
+          }, 3000);
+        }
       }, delay);
     }
   });

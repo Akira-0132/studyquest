@@ -40,7 +40,6 @@ self.addEventListener('push', (event) => {
     body: event.data.text() || 'StudyQuestからの通知です',
     icon: '/icon-192x192.png',
     badge: '/icon-96x96.png',
-    vibrate: [100, 50, 100],
     tag: 'studyquest-notification',
     renotify: true,
     requireInteraction: false,
