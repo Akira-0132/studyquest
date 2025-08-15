@@ -125,7 +125,7 @@ export async function testServiceWorkerNotification() {
           tag: 'sw-test-notification',
           requireInteraction: true,
           vibrate: [200, 100, 200],
-        });
+        } as any);
         console.log('Service Worker通知が送信されました');
         return true;
       } else {
