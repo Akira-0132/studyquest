@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { BackButton } from '@/components/BackButton';
 import { ClientOnly } from '@/components/ClientOnly';
 import { getUserData, updateUserData } from '@/lib/streakManager';
-import { scheduleLocalNotifications, testNotification, testServiceWorkerNotification } from '@/lib/notificationHelper';
+import { scheduleLocalNotifications, testScheduledNotification, testServiceWorkerNotification } from '@/lib/notificationHelper';
 
 export default function SettingsPage() {
   const [notificationSettings, setNotificationSettings] = useState({
@@ -66,11 +66,9 @@ export default function SettingsPage() {
         if (enabled) {
           // 通知を有効にした場合、スケジューリングを開始
           await scheduleLocalNotifications();
-          // テスト通知を表示
-          setTimeout(() => {
-            testNotification();
-          }, 1000);
-          alert('通知が有効になりました！');
+          // テスト通知を即座に表示
+          await scheduleLocalNotifications(true);
+          alert('通知が有効になりました！\n\n指定時刻に通知が届きます。');
         } else {
           alert(`通知許可が拒否されました。状態: ${permission}\nブラウザの設定から手動で許可してください。`);
         }
@@ -94,46 +92,23 @@ export default function SettingsPage() {
     }
   };
 
-  const handleTestNotification = () => {
+  // 1分後に通知を送るテスト機能
+  const handleScheduledTest = async () => {
     if (!notificationSettings.enabled) {
       alert('まず通知を有効にしてください。');
       return;
     }
     
-    console.log('テスト通知を実行中...');
-    const result = testNotification();
-    
-    if (result) {
-      alert('テスト通知を送信しました！\n\n通知が表示されない場合は：\n1. iPhoneの設定 → 通知でStudyQuestが許可されているか確認\n2. おやすみモードが有効でないか確認\n3. アプリを一度バックグラウンドにしてみてください');
+    const success = await testScheduledNotification();
+    if (success) {
+      alert('1分後にテスト通知を送信します。\n\nアプリをバックグラウンドにしても通知が届くか確認してください。');
     }
   };
 
-  // 5秒後にテスト通知を送る機能
-  const handleDelayedTest = () => {
-    if (!notificationSettings.enabled) {
-      alert('まず通知を有効にしてください。');
-      return;
-    }
-    
-    alert('5秒後にテスト通知を送信します。\nアプリをバックグラウンドにして待ってください。');
-    
-    setTimeout(() => {
-      testNotification();
-    }, 5000);
-  };
-
-  // Service Worker通知テスト
-  const handleServiceWorkerTest = async () => {
-    if (!notificationSettings.enabled) {
-      alert('まず通知を有効にしてください。');
-      return;
-    }
-    
-    alert('Service Worker経由の通知をテストします。\nアプリをバックグラウンドにしてください。');
-    
-    setTimeout(async () => {
-      await testServiceWorkerNotification();
-    }, 2000);
+  // 定期通知の再スケジュール
+  const rescheduleNotifications = async () => {
+    await scheduleLocalNotifications();
+    alert('定期通知を再スケジュールしました。\n\n設定した時刻に通知が届きます。');
   };
 
   // 詳細診断機能
@@ -245,31 +220,16 @@ ${permission !== 'granted' ? '⚠️ 通知許可が必要です' : ''}
               {notificationSettings.enabled && (
                 <>
                   <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                    <div className="mb-3 space-y-2">
+                    <div className="mb-3">
                       <button
-                        onClick={handleTestNotification}
+                        onClick={handleScheduledTest}
                         className="w-full px-3 py-2 bg-indigo-500 text-white rounded-lg text-sm font-medium hover:bg-indigo-600 transition-colors"
                       >
-                        📢 即座にテスト通知
+                        ⏰ 1分後にテスト通知
                       </button>
-                      <button
-                        onClick={handleDelayedTest}
-                        className="w-full px-3 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
-                      >
-                        ⏱️ 5秒後にテスト通知
-                      </button>
-                      <button
-                        onClick={handleServiceWorkerTest}
-                        className="w-full px-3 py-2 bg-purple-500 text-white rounded-lg text-sm font-medium hover:bg-purple-600 transition-colors"
-                      >
-                        🔧 Service Worker通知テスト
-                      </button>
-                      <button
-                        onClick={runDiagnostics}
-                        className="w-full px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
-                      >
-                        🔍 通知診断を実行
-                      </button>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        ※定期通知が正しく動作するか確認できます
+                      </p>
                     </div>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
@@ -301,6 +261,16 @@ ${permission !== 'granted' ? '⚠️ 通知許可が必要です' : ''}
                           className="px-3 py-1 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         />
                       </div>
+                      
+                      <button
+                        onClick={rescheduleNotifications}
+                        className="w-full px-3 py-2 bg-gray-500 text-white rounded-lg text-sm font-medium hover:bg-gray-600 transition-colors mt-3"
+                      >
+                        🔄 通知を再スケジュール
+                      </button>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        ※時刻を変更した後にタップしてください
+                      </p>
                     </div>
                   </div>
                 </>

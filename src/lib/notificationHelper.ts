@@ -28,18 +28,23 @@ export function showLocalNotification(title: string, body: string, options?: Not
   return null;
 }
 
-export async function scheduleLocalNotifications() {
+// 定期通知のスケジューリング（テスト用の即座実行機能付き）
+export async function scheduleLocalNotifications(testMode: boolean = false) {
   if (!('serviceWorker' in navigator) || !('Notification' in window) || Notification.permission !== 'granted') {
+    console.log('通知機能が利用できません');
     return;
   }
 
   const settings = JSON.parse(localStorage.getItem('studyquest_notifications') || '{}');
   
-  if (!settings.enabled) return;
+  if (!settings.enabled && !testMode) return;
 
   try {
     const registration = await navigator.serviceWorker.getRegistration();
-    if (!registration) return;
+    if (!registration) {
+      console.log('Service Workerが登録されていません');
+      return;
+    }
 
     const now = new Date();
     const messages = [
@@ -48,6 +53,24 @@ export async function scheduleLocalNotifications() {
       { time: settings.evening || '20:00', message: 'ラストスパート！もう少し！💪' },
     ];
 
+    // テストモードの場合、すぐに最初の通知を送信
+    if (testMode) {
+      try {
+        await registration.showNotification('StudyQuest', {
+          body: '📱 定期通知のテストです。指定時刻になると通知が届きます。',
+          icon: '/icon-192x192.png',
+          badge: '/icon-96x96.png',
+          tag: 'studyquest-test',
+          requireInteraction: false,
+        } as any);
+        console.log('テスト通知を送信しました');
+      } catch (error) {
+        console.error('テスト通知の送信に失敗:', error);
+      }
+      return;
+    }
+
+    // 通常のスケジューリング
     messages.forEach(({ time, message }) => {
       const [hours, minutes] = time.split(':').map(Number);
       const scheduledTime = new Date();
@@ -59,63 +82,78 @@ export async function scheduleLocalNotifications() {
       }
       
       const delay = scheduledTime.getTime() - now.getTime();
+      console.log(`通知をスケジュール: ${time} - ${message} (${Math.floor(delay / 1000 / 60)}分後)`);
       
       // 24時間以内のもののみスケジュール
       if (delay > 0 && delay <= 24 * 60 * 60 * 1000) {
         setTimeout(async () => {
           try {
-            await registration.showNotification('StudyQuest', {
-              body: message,
-              icon: '/icon-192x192.png',
-              badge: '/icon-96x96.png',
-              tag: 'studyquest-scheduled',
-              requireInteraction: false,
-            } as any);
-            console.log(`定期通知を送信しました: ${message}`);
+            const reg = await navigator.serviceWorker.getRegistration();
+            if (reg) {
+              await reg.showNotification('StudyQuest', {
+                body: message,
+                icon: '/icon-192x192.png',
+                badge: '/icon-96x96.png',
+                tag: 'studyquest-scheduled',
+                requireInteraction: false,
+              } as any);
+              console.log(`定期通知を送信しました: ${message}`);
+            }
           } catch (error) {
             console.error('定期通知の送信に失敗:', error);
           }
         }, delay);
       }
     });
+    
+    console.log('定期通知のスケジューリングが完了しました');
   } catch (error) {
     console.error('定期通知のスケジューリングに失敗:', error);
   }
 }
 
-export function testNotification() {
-  if ('Notification' in window && Notification.permission === 'granted') {
-    // より確実な通知実装
-    try {
-      const notification = new Notification('StudyQuest テスト通知', {
-        body: '🎉 通知が正常に動作しています！この通知が見えれば成功です。',
-        icon: '/icon-192x192.png',
-        badge: '/icon-96x96.png',
-        tag: 'test-notification',
-        requireInteraction: true, // ユーザーが操作するまで残る
-      } as any);
-
-      // クリック時の動作
-      notification.onclick = () => {
-        window.focus();
-        notification.close();
-      };
-
-      // 10秒後に自動で閉じる
-      setTimeout(() => {
-        notification.close();
-      }, 10000);
-
-      console.log('テスト通知を送信しました');
-      return notification;
-    } catch (error) {
-      console.error('テスト通知の送信に失敗:', error);
-      alert(`通知送信エラー: ${error}`);
-    }
-  } else {
-    alert('通知が許可されていません');
+// 1分後に通知を送信するテスト機能
+export async function testScheduledNotification() {
+  if (!('serviceWorker' in navigator) || !('Notification' in window) || Notification.permission !== 'granted') {
+    alert('通知機能が利用できません');
+    return false;
   }
-  return null;
+
+  try {
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (!registration) {
+      alert('Service Workerが登録されていません');
+      return false;
+    }
+
+    // 1分後に通知
+    const delay = 60 * 1000; // 60秒
+    console.log('1分後に通知を送信します');
+    
+    setTimeout(async () => {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+          await reg.showNotification('StudyQuest', {
+            body: '⏰ 1分後の定期通知テストです！',
+            icon: '/icon-192x192.png',
+            badge: '/icon-96x96.png',
+            tag: 'studyquest-1min-test',
+            requireInteraction: true,
+          } as any);
+          console.log('1分後のテスト通知を送信しました');
+        }
+      } catch (error) {
+        console.error('1分後のテスト通知の送信に失敗:', error);
+      }
+    }, delay);
+    
+    return true;
+  } catch (error) {
+    console.error('テスト通知のスケジューリングに失敗:', error);
+    alert(`エラー: ${error}`);
+    return false;
+  }
 }
 
 // Service Worker経由の通知テスト
