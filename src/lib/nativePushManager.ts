@@ -1,7 +1,7 @@
 // ネイティブWeb Push API管理システム
 
 // VAPIDキー（公開鍵）- 環境変数から読み込み
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BNJzD4KrHlIdNp5dxEhUosMWXNf_L6bI6Cn1FbKLtEqvw7wl2Gc8OQTF1g4j3Y7kQRFZXNp5dxEhUosMWXNf_L6bI6Cn1FbKL';
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BHvx5bXyuSIfYrkymeGlH6lR4SjsVJo7WZ1JsPzFAo3uNEXamy_qSBVEBPgIzeEgrscBoRSKZMo2GRTguiGeBP0';
 
 /**
  * Service Workerを登録（詳細デバッグ付き）
@@ -85,7 +85,7 @@ export async function subscribeToPush(): Promise<PushSubscription | null> {
     if (subscription) {
       console.log('✅ Found existing push subscription');
       console.log('- Endpoint:', subscription.endpoint.substring(0, 50) + '...');
-      console.log('- Keys:', subscription.getKey ? 'Available' : 'Not available');
+      console.log('- Keys:', subscription.getKey('p256dh') ? 'Available' : 'Not available');
     } else {
       console.log('📝 No existing subscription found');
       
