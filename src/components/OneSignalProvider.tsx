@@ -5,18 +5,33 @@ import Script from 'next/script';
 
 export function OneSignalProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
+    // App IDをチェック
+    const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
+    console.log('OneSignal App ID:', appId ? `${appId.substring(0, 8)}...` : 'NOT SET');
+    
+    if (!appId || appId === "YOUR_APP_ID_HERE") {
+      console.error('⚠️ OneSignal App IDが設定されていません！');
+      console.error('1. OneSignalでアカウントを作成してApp IDを取得してください');
+      console.error('2. Vercelの環境変数にNEXT_PUBLIC_ONESIGNAL_APP_IDを設定してください');
+      // OneSignalなしでも動作するようにする
+      return;
+    }
+    
     // OneSignal初期化
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     
     window.OneSignalDeferred.push(async function(OneSignal: any) {
-      // 既に初期化されている場合はスキップ
-      if (await OneSignal.isPushNotificationsEnabled()) {
-        console.log('OneSignal already initialized');
-        return;
-      }
+      try {
+        // 既に初期化されているかチェック
+        const isInitialized = await OneSignal.initialized;
+        if (isInitialized) {
+          console.log('OneSignal already initialized');
+          return;
+        }
 
-      await OneSignal.init({
-        appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || "YOUR_APP_ID_HERE",
+        console.log('Initializing OneSignal...');
+        await OneSignal.init({
+          appId: appId,
         safari_web_id: process.env.NEXT_PUBLIC_ONESIGNAL_SAFARI_WEB_ID,
         allowLocalhostAsSecureOrigin: true,
         welcomeNotification: {
@@ -79,6 +94,11 @@ export function OneSignalProvider({ children }: { children: React.ReactNode }) {
           window.location.href = event.notification.data.page;
         }
       });
+      
+      console.log('OneSignal initialization complete');
+    } catch (error) {
+      console.error('OneSignal initialization error:', error);
+    }
     });
   }, []);
 

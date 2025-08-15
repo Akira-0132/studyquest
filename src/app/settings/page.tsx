@@ -221,6 +221,14 @@ ${permission !== 'granted' ? '⚠️ 通知許可が必要です' : ''}
               🔔 通知設定
             </h3>
             
+            {/* デバッグ情報 */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="mb-4 p-2 bg-gray-100 dark:bg-gray-700 rounded text-xs">
+                <p>OneSignal App ID: {process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ? '設定済み' : '未設定'}</p>
+                <p>通知権限: {notificationSettings.enabled ? '許可' : '未許可'}</p>
+              </div>
+            )}
+            
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-gray-700 dark:text-gray-300">プッシュ通知</span>

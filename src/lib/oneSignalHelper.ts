@@ -4,8 +4,24 @@
  * OneSignalで通知権限をリクエスト
  */
 export async function requestOneSignalPermission(): Promise<boolean> {
+  // 環境変数チェック
+  if (!process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID === "YOUR_APP_ID_HERE") {
+    console.error('OneSignal App IDが設定されていません');
+    // フォールバック: 通常のWeb Notification APIを使用
+    if ('Notification' in window) {
+      const permission = await Notification.requestPermission();
+      return permission === 'granted';
+    }
+    return false;
+  }
+  
   if (typeof window === 'undefined' || !window.OneSignal) {
-    console.log('OneSignal not available');
+    console.log('OneSignal not available, using fallback');
+    // フォールバック: 通常のWeb Notification APIを使用
+    if ('Notification' in window) {
+      const permission = await Notification.requestPermission();
+      return permission === 'granted';
+    }
     return false;
   }
 
@@ -18,6 +34,11 @@ export async function requestOneSignalPermission(): Promise<boolean> {
     return permission;
   } catch (error) {
     console.error('Failed to request OneSignal permission:', error);
+    // フォールバック: 通常のWeb Notification APIを使用
+    if ('Notification' in window) {
+      const permission = await Notification.requestPermission();
+      return permission === 'granted';
+    }
     return false;
   }
 }
@@ -129,6 +150,10 @@ export async function toggleOneSignalNotifications(enabled: boolean) {
  */
 export async function getOneSignalPermissionState(): Promise<boolean> {
   if (typeof window === 'undefined' || !window.OneSignal) {
+    // フォールバック: 通常のNotification APIをチェック
+    if ('Notification' in window) {
+      return Notification.permission === 'granted';
+    }
     return false;
   }
 
@@ -137,6 +162,10 @@ export async function getOneSignalPermissionState(): Promise<boolean> {
     return permission;
   } catch (error) {
     console.error('Failed to get permission state:', error);
+    // フォールバック: 通常のNotification APIをチェック
+    if ('Notification' in window) {
+      return Notification.permission === 'granted';
+    }
     return false;
   }
 }
