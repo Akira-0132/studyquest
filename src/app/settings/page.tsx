@@ -71,49 +71,76 @@ export default function SettingsPage() {
     };
   }, []);
 
-  // 🚀 ネイティブプッシュ通知システム
+  // 🚀 ネイティブプッシュ通知システム（徹底デバッグ版）
   const setupNativePushNotifications = async () => {
     addDebugLog('🚀 ネイティブプッシュ通知セットアップ開始...');
     
     try {
+      // ブラウザ環境確認
+      addDebugLog(`🔍 環境確認:`);
+      addDebugLog(`- User Agent: ${navigator.userAgent.substring(0, 50)}...`);
+      addDebugLog(`- PWA Mode: ${window.matchMedia('(display-mode: standalone)').matches}`);
+      addDebugLog(`- HTTPS: ${location.protocol === 'https:'}`);
+      
       // 権限リクエスト
+      addDebugLog('📋 Step 1: 通知権限リクエスト');
       const permission = await Notification.requestPermission();
       addDebugLog(`📋 通知権限結果: ${permission}`);
       
       if (permission !== 'granted') {
         addDebugLog('❌ 通知権限が拒否されました');
-        alert('通知権限が必要です。ブラウザの設定で許可してください。');
+        alert('❌ 通知権限が必要です。\n\n【解決方法】\n1. ブラウザの設定を開く\n2. このサイトの通知を「許可」に設定\n3. ページを再読み込み');
         return false;
       }
       
-      // プッシュ購読
+      addDebugLog('✅ 通知権限が許可されました');
+      
+      // プッシュ購読（詳細ログは関数内で出力）
+      addDebugLog('📋 Step 2: プッシュ購読作成');
       const subscription = await subscribeToPush();
       if (!subscription) {
-        addDebugLog('❌ プッシュ購読に失敗');
+        addDebugLog('❌ プッシュ購読作成に失敗');
+        alert('❌ プッシュ通知の購読に失敗しました。\n\n【考えられる原因】\n- Service Workerの問題\n- VAPIDキーの問題\n- iOS Safari固有の制限\n\nデバッグログを確認してください。');
         return false;
       }
       
-      addDebugLog('✅ プッシュ購読成功');
+      addDebugLog('✅ プッシュ購読作成完了');
+      addDebugLog(`📝 Subscription endpoint: ${subscription.endpoint.substring(0, 30)}...`);
       
       // スケジュール設定
-      const success = await scheduleNotifications(notificationSettings);
-      if (success) {
-        addDebugLog('✅ スケジュール通知設定完了');
-        
-        // 状態更新
-        const newSettings = { ...notificationSettings, enabled: true };
-        setNotificationSettings(newSettings);
-        localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
-        
-        alert('🎉 バックグラウンド通知が設定されました！\n\nアプリが閉じていても指定時刻に通知が届きます。');
-        return true;
-      } else {
-        addDebugLog('❌ スケジュール設定に失敗');
+      addDebugLog('📋 Step 3: スケジュール通知設定');
+      try {
+        const success = await scheduleNotifications(notificationSettings);
+        if (success) {
+          addDebugLog('✅ スケジュール通知設定完了');
+          
+          // 状態更新
+          const newSettings = { ...notificationSettings, enabled: true };
+          setNotificationSettings(newSettings);
+          localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
+          
+          addDebugLog('🎉 バックグラウンド通知システム有効化完了');
+          alert('🎉 バックグラウンド通知が設定されました！\n\n✅ アプリが閉じていても指定時刻に通知が届きます\n✅ テスト通知ボタンで動作確認できます');
+          return true;
+        } else {
+          addDebugLog('❌ スケジュール設定に失敗');
+          alert('⚠️ スケジュール設定に失敗しましたが、\nプッシュ購読は成功しました。\nテスト通知は利用できます。');
+          return false;
+        }
+      } catch (scheduleError) {
+        addDebugLog(`❌ スケジュール設定エラー: ${scheduleError}`);
+        alert('⚠️ スケジュール設定でエラーが発生しましたが、\nプッシュ購読は成功しました。\nテスト通知は利用できます。');
         return false;
       }
       
     } catch (error) {
-      addDebugLog(`❌ ネイティブプッシュエラー: ${error}`);
+      addDebugLog(`❌ セットアップ全般エラー: ${error}`);
+      addDebugLog(`❌ エラー詳細: ${JSON.stringify({
+        name: (error as Error).name,
+        message: (error as Error).message
+      })}`);
+      
+      alert('❌ バックグラウンド通知のセットアップに失敗しました。\n\nデバッグログで詳細を確認してください。');
       return false;
     }
   };
