@@ -5,14 +5,6 @@ import { motion } from 'framer-motion';
 import { BackButton } from '@/components/BackButton';
 import { ClientOnly } from '@/components/ClientOnly';
 import { getUserData, updateUserData } from '@/lib/streakManager';
-import { 
-  requestOneSignalPermission, 
-  updateOneSignalNotificationSettings, 
-  sendOneSignalTestNotification,
-  toggleOneSignalNotifications,
-  getOneSignalPermissionState,
-  isOneSignalInitialized
-} from '@/lib/oneSignalHelper';
 import {
   subscribeToPush,
   unsubscribeFromPush,
@@ -71,9 +63,9 @@ export default function SettingsPage() {
     };
   }, []);
 
-  // 🚀 ネイティブプッシュ通知システム（徹底デバッグ版）
-  const setupNativePushNotifications = async () => {
-    addDebugLog('🚀 ネイティブプッシュ通知セットアップ開始...');
+  // 🚀 バックグラウンド通知システム（ネイティブ実装）
+  const setupBackgroundNotifications = async () => {
+    addDebugLog('🚀 バックグラウンド通知セットアップ開始...');
     
     try {
       // ブラウザ環境確認
@@ -89,7 +81,7 @@ export default function SettingsPage() {
       
       if (permission !== 'granted') {
         addDebugLog('❌ 通知権限が拒否されました');
-        alert('❌ 通知権限が必要です。\n\n【解決方法】\n1. ブラウザの設定を開く\n2. このサイトの通知を「許可」に設定\n3. ページを再読み込み');
+        alert('❌ 通知権限が必要です。\\n\\n【解決方法】\\n1. ブラウザの設定を開く\\n2. このサイトの通知を「許可」に設定\\n3. ページを再読み込み');
         return false;
       }
       
@@ -100,7 +92,7 @@ export default function SettingsPage() {
       const subscription = await subscribeToPush();
       if (!subscription) {
         addDebugLog('❌ プッシュ購読作成に失敗');
-        alert('❌ プッシュ通知の購読に失敗しました。\n\n【考えられる原因】\n- Service Workerの問題\n- VAPIDキーの問題\n- iOS Safari固有の制限\n\nデバッグログを確認してください。');
+        alert('❌ プッシュ通知の購読に失敗しました。\\n\\n【考えられる原因】\\n- Service Workerの問題\\n- VAPIDキーの問題\\n- iOS Safari固有の制限\\n\\nデバッグログを確認してください。');
         return false;
       }
       
@@ -120,16 +112,16 @@ export default function SettingsPage() {
           localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
           
           addDebugLog('🎉 バックグラウンド通知システム有効化完了');
-          alert('🎉 バックグラウンド通知が設定されました！\n\n✅ アプリが閉じていても指定時刻に通知が届きます\n✅ テスト通知ボタンで動作確認できます');
+          alert('🎉 バックグラウンド通知が設定されました！\\n\\n✅ アプリが閉じていても指定時刻に通知が届きます\\n✅ テスト通知ボタンで動作確認できます');
           return true;
         } else {
           addDebugLog('❌ スケジュール設定に失敗');
-          alert('⚠️ スケジュール設定に失敗しましたが、\nプッシュ購読は成功しました。\nテスト通知は利用できます。');
+          alert('⚠️ スケジュール設定に失敗しましたが、\\nプッシュ購読は成功しました。\\nテスト通知は利用できます。');
           return false;
         }
       } catch (scheduleError) {
         addDebugLog(`❌ スケジュール設定エラー: ${scheduleError}`);
-        alert('⚠️ スケジュール設定でエラーが発生しましたが、\nプッシュ購読は成功しました。\nテスト通知は利用できます。');
+        alert('⚠️ スケジュール設定でエラーが発生しましたが、\\nプッシュ購読は成功しました。\\nテスト通知は利用できます。');
         return false;
       }
       
@@ -140,14 +132,14 @@ export default function SettingsPage() {
         message: (error as Error).message
       })}`);
       
-      alert('❌ バックグラウンド通知のセットアップに失敗しました。\n\nデバッグログで詳細を確認してください。');
+      alert('❌ バックグラウンド通知のセットアップに失敗しました。\\n\\nデバッグログで詳細を確認してください。');
       return false;
     }
   };
 
-  // ネイティブテスト通知
-  const sendNativeTestNotification = async () => {
-    addDebugLog('🧪 ネイティブテスト通知送信中...');
+  // テスト通知送信
+  const sendTestPushNotification = async () => {
+    addDebugLog('🧪 テスト通知送信中...');
     
     try {
       const success = await sendTestNotification(
@@ -156,25 +148,25 @@ export default function SettingsPage() {
       );
       
       if (success) {
-        addDebugLog('✅ ネイティブテスト通知送信成功');
-        alert('テスト通知を送信しました！\n\nアプリをバックグラウンドにしても通知が届くことを確認してください。');
+        addDebugLog('✅ テスト通知送信成功');
+        alert('テスト通知を送信しました！\\n\\nアプリをバックグラウンドにしても通知が届くことを確認してください。');
       } else {
-        addDebugLog('❌ ネイティブテスト通知送信失敗');
+        addDebugLog('❌ テスト通知送信失敗');
         alert('テスト通知の送信に失敗しました。');
       }
     } catch (error) {
-      addDebugLog(`❌ ネイティブテスト通知エラー: ${error}`);
+      addDebugLog(`❌ テスト通知エラー: ${error}`);
     }
   };
 
-  // ネイティブ通知無効化
-  const disableNativePushNotifications = async () => {
-    addDebugLog('🔕 ネイティブプッシュ通知無効化中...');
+  // 通知無効化
+  const disableBackgroundNotifications = async () => {
+    addDebugLog('🔕 バックグラウンド通知無効化中...');
     
     try {
       const success = await unsubscribeFromPush();
       if (success) {
-        addDebugLog('✅ ネイティブプッシュ通知無効化完了');
+        addDebugLog('✅ バックグラウンド通知無効化完了');
         
         const newSettings = { ...notificationSettings, enabled: false };
         setNotificationSettings(newSettings);
@@ -182,10 +174,27 @@ export default function SettingsPage() {
         
         alert('🔕 バックグラウンド通知を無効にしました。');
       } else {
-        addDebugLog('❌ ネイティブプッシュ通知無効化失敗');
+        addDebugLog('❌ バックグラウンド通知無効化失敗');
       }
     } catch (error) {
-      addDebugLog(`❌ ネイティブプッシュ無効化エラー: ${error}`);
+      addDebugLog(`❌ 通知無効化エラー: ${error}`);
+    }
+  };
+
+  // 通知時刻変更
+  const updateNotificationTime = async (type: string, time: string) => {
+    const newSettings = { ...notificationSettings, [type]: time };
+    setNotificationSettings(newSettings);
+    localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
+    
+    // 有効な場合は再スケジュール
+    if (newSettings.enabled) {
+      try {
+        await scheduleNotifications(newSettings);
+        addDebugLog(`⏰ ${type}の通知時刻を${time}に更新`);
+      } catch (error) {
+        addDebugLog(`❌ 時刻更新エラー: ${error}`);
+      }
     }
   };
 
@@ -199,700 +208,181 @@ export default function SettingsPage() {
       setNotificationSettings(JSON.parse(saved));
     }
 
-    // OneSignal権限状態をチェック
-    const checkOneSignalPermission = async () => {
-      const enabled = await getOneSignalPermissionState();
-      setNotificationSettings(prev => ({
-        ...prev,
-        enabled,
-      }));
-    };
-    
-    // 少し遅延させてOneSignalの初期化を待つ
-    setTimeout(checkOneSignalPermission, 1000);
-
-    // OneSignal購読変更イベントリスナー
-    const handleSubscriptionChange = (event: CustomEvent) => {
-      console.log('Subscription change event:', event.detail);
-      setNotificationSettings(prev => ({
-        ...prev,
-        enabled: event.detail.subscribed,
-      }));
-    };
-    
-    window.addEventListener('onesignal-subscription-change', handleSubscriptionChange as any);
-    
     // PWA状態をチェック
     const isPWA = window.matchMedia('(display-mode: standalone)').matches;
-    if (!isPWA && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
-      console.log('iPhoneでPWAではない状態で実行中');
-    }
+    addDebugLog(`PWA状態: ${isPWA ? '✅ PWAモード' : '❌ ブラウザモード'}`);
     
-    return () => {
-      window.removeEventListener('onesignal-subscription-change', handleSubscriptionChange as any);
-    };
+    if (!isPWA && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
+      addDebugLog('⚠️ iPhoneでPWAではない状態（ホーム画面追加推奨）');
+    }
   }, []);
 
-  const handleNotificationPermission = async () => {
-    try {
-      console.log('🔔 OneSignal通知権限をリクエスト中...');
-      
-      if (notificationSettings.enabled) {
-        // 通知を無効にする場合
-        const success = await toggleOneSignalNotifications(false);
-        if (success) {
-          const newSettings = { ...notificationSettings, enabled: false };
-          setNotificationSettings(newSettings);
-          localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
-          alert('🔕 通知を無効にしました。');
-        } else {
-          alert('通知の無効化に失敗しました。');
-        }
-        return;
-      }
-      
-      // 通知を有効にする場合
-      const enabled = await requestOneSignalPermission();
-      
-      // 少し待ってから状態を再確認
-      setTimeout(async () => {
-        const actualState = await getOneSignalPermissionState();
-        const newSettings = { ...notificationSettings, enabled: actualState };
-        setNotificationSettings(newSettings);
-        localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
-        
-        if (actualState) {
-          // OneSignalの設定を更新
-          await updateOneSignalNotificationSettings(newSettings);
-          // テスト通知を送信
-          await sendOneSignalTestNotification('🎉 OneSignal通知が有効になりました！');
-          alert('✅ 通知が有効になりました！\n\n指定時刻に通知が届きます。\nバックグラウンドでも確実に動作します。');
-        } else {
-          alert('❌ 通知権限が拒否されました。\n\nブラウザの設定から手動で許可してください。\n\n【設定方法】\n1. ブラウザの設定を開く\n2. プライバシーとセキュリティ\n3. サイトの設定\n4. 通知\n5. このサイトを許可リストに追加');
-        }
-      }, 1000);
-      
-    } catch (error) {
-      console.error('❌ 通知許可エラー:', error);
-      alert(`エラーが発生しました: ${error}`);
-    }
-  };
-
-  const updateNotificationTime = async (type: string, time: string) => {
-    const newSettings = { ...notificationSettings, [type]: time };
-    setNotificationSettings(newSettings);
-    localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
-    
-    // OneSignalの設定を更新
-    if (newSettings.enabled) {
-      await updateOneSignalNotificationSettings(newSettings);
-    }
-  };
-
-  // OneSignalテスト通知機能
-  const handleScheduledTest = async () => {
-    if (!notificationSettings.enabled) {
-      alert('まず通知を有効にしてください。');
-      return;
-    }
-    
-    const success = await sendOneSignalTestNotification('⏰ OneSignalテスト通知です！バックグラウンドでも確実に届きます。');
-    if (success) {
-      alert('テスト通知を送信しました！\n\nアプリをバックグラウンドにしても通知が届くことを確認してください。');
-    } else {
-      alert('テスト通知の送信に失敗しました。');
-    }
-  };
-
-  // OneSignal設定の同期
-  const rescheduleNotifications = async () => {
-    await updateOneSignalNotificationSettings(notificationSettings);
-    alert('OneSignal通知設定を更新しました。\n\n設定した時刻に通知が届きます。');
-  };
-
-  // OneSignalの手動初期化を試行
-  const forceOneSignalInit = async () => {
-    addDebugLog('🔄 OneSignalの手動初期化を開始...');
-    
-    try {
-      // OneSignalオブジェクトの存在確認
-      addDebugLog(`🔍 window.OneSignal: ${window.OneSignal ? '存在' : '未定義'}`);
-      
-      if (!window.OneSignal) {
-        addDebugLog('❌ OneSignal SDKが読み込まれていません');
-        
-        // SDKの再読み込みを試行
-        addDebugLog('🔄 OneSignal SDKの再読み込みを試行...');
-        const script = document.createElement('script');
-        script.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
-        script.onload = () => {
-          addDebugLog('✅ OneSignal SDK再読み込み完了');
-          // 読み込み後に少し待ってから再度初期化を試行
-          setTimeout(() => forceOneSignalInit(), 2000);
-        };
-        script.onerror = () => addDebugLog('❌ OneSignal SDK再読み込み失敗');
-        document.head.appendChild(script);
-        
-        return;
-      }
-      
-      // App ID確認
-      const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
-      addDebugLog(`🔑 使用するApp ID: ${appId ? appId.substring(0, 8) + '...' : '未設定'}`);
-      
-      if (!appId) {
-        addDebugLog('❌ OneSignal App IDが設定されていません');
-        return;
-      }
-      
-      // 初期化状態確認（より安全なチェック）
-      const hasRequiredMethods = typeof window.OneSignal.init === 'function' && 
-                                 typeof window.OneSignal.getNotificationPermission === 'function';
-      addDebugLog(`📋 必要メソッド: ${hasRequiredMethods}`);
-      
-      // OneSignalオブジェクトは存在するが、メソッドが不完全な場合
-      if (!hasRequiredMethods) {
-        addDebugLog('⚠️ OneSignal SDKが不完全です。再読み込みを待機中...');
-        
-        // 少し待ってからメソッドが利用可能になるかチェック
-        let retryCount = 0;
-        const checkMethods = setInterval(() => {
-          retryCount++;
-          const methodsReady = typeof window.OneSignal.init === 'function' && 
-                              typeof window.OneSignal.getNotificationPermission === 'function';
-          
-          if (methodsReady) {
-            addDebugLog(`✅ OneSignalメソッド準備完了 (${retryCount}回目)`);
-            clearInterval(checkMethods);
-            // 再帰的に初期化を試行
-            setTimeout(() => forceOneSignalInit(), 500);
-          } else if (retryCount > 10) {
-            addDebugLog('❌ OneSignalメソッド準備タイムアウト');
-            clearInterval(checkMethods);
-          }
-        }, 500);
-        
-        return;
-      }
-      
-      // 手動で初期化設定を実行
-      const initConfig = {
-        appId: appId,
-        allowLocalhostAsSecureOrigin: true,
-        serviceWorkerPath: "/OneSignalSDKWorker.js",
-        serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
-        notifyButton: { enable: false },
-        promptOptions: {
-          native: { enabled: true, autoPrompt: false }
-        }
-      };
-      
-      addDebugLog('🔧 OneSignal手動初期化実行中...');
-      await window.OneSignal.init(initConfig);
-      addDebugLog('✅ OneSignal手動初期化完了');
-      
-      // 初期化後の状態確認
-      let permission = 'unknown';
-      let subscribed = false;
-      
-      try {
-        permission = await window.OneSignal.getNotificationPermission();
-      } catch (e) {
-        addDebugLog(`❌ 権限チェックエラー: ${e}`);
-      }
-      
-      try {
-        subscribed = await window.OneSignal.isPushNotificationsEnabled();
-      } catch (e) {
-        addDebugLog(`❌ 購読チェックエラー: ${e}`);
-      }
-      
-      addDebugLog(`📋 初期化後権限: ${permission}`);
-      addDebugLog(`📋 初期化後購読: ${subscribed}`);
-      
-    } catch (error) {
-      addDebugLog(`❌ OneSignal手動初期化エラー: ${error}`);
-      addDebugLog(`❌ エラー詳細: ${JSON.stringify(error)}`);
-    }
-  };
-
-  // 直接ブラウザ権限をリクエスト
-  const requestDirectBrowserPermission = async () => {
-    addDebugLog('🔔 ブラウザ権限を直接リクエスト中...');
-    
-    if (!('Notification' in window)) {
-      addDebugLog('❌ このブラウザは通知をサポートしていません');
-      return;
-    }
-    
-    try {
-      const permission = await Notification.requestPermission();
-      addDebugLog(`📋 ブラウザ権限結果: ${permission}`);
-      
-      if (permission === 'granted') {
-        addDebugLog('✅ ブラウザ権限が許可されました！');
-        
-        // 権限取得後にOneSignalの初期化を再試行
-        addDebugLog('🔄 権限取得後のOneSignal初期化を試行...');
-        await forceOneSignalInit();
-        
-        // 状態を更新
-        setTimeout(async () => {
-          const newState = await getOneSignalPermissionState();
-          const newSettings = { ...notificationSettings, enabled: newState };
-          setNotificationSettings(newSettings);
-          localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
-        }, 2000);
-      } else {
-        addDebugLog('❌ ブラウザ権限が拒否されました');
-      }
-    } catch (error) {
-      addDebugLog(`❌ ブラウザ権限エラー: ${error}`);
-    }
-  };
-
-  // iPhone専用の詳細診断機能
-  const runIOSDetailedDiagnostics = async () => {
-    const isPWA = window.matchMedia('(display-mode: standalone)').matches;
-    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-    const notificationSupport = 'Notification' in window;
-    const permission = notificationSupport ? Notification.permission : 'not-supported';
-    const serviceWorkerSupport = 'serviceWorker' in navigator;
-    
-    addDebugLog('🔍 詳細診断開始');
-    addDebugLog(`📱 デバイス: ${isIOS ? 'iOS' : 'その他'}`);
-    addDebugLog(`🖥️ PWAモード: ${isPWA}`);
-    addDebugLog(`🔔 通知API: ${notificationSupport}`);
-    addDebugLog(`✅ ブラウザ権限: ${permission}`);
-    
-    // OneSignal App ID確認
-    const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
-    addDebugLog(`🔑 App ID: ${appId ? appId.substring(0, 8) + '...' : '未設定'}`);
-    
-    // OneSignalの状態チェック
-    try {
-      const oneSignalReady = await isOneSignalInitialized();
-      addDebugLog(`🔄 OneSignal初期化: ${oneSignalReady}`);
-      
-      if (oneSignalReady && window.OneSignal) {
-        let osPermission = 'unknown';
-        let osSubscribed = false;
-        let osSupported = false;
-        
-        try {
-          osPermission = await window.OneSignal.getNotificationPermission();
-        } catch (e) {
-          addDebugLog(`❌ OneSignal権限取得エラー: ${e}`);
-        }
-        
-        try {
-          osSubscribed = await window.OneSignal.isPushNotificationsEnabled();
-        } catch (e) {
-          addDebugLog(`❌ OneSignal購読取得エラー: ${e}`);
-        }
-        
-        try {
-          osSupported = typeof window.OneSignal.getNotificationPermission === 'function';
-        } catch (e) {
-          osSupported = false;
-        }
-        
-        addDebugLog(`📋 OneSignal権限: ${osPermission}`);
-        addDebugLog(`📋 OneSignal購読: ${osSubscribed}`);
-        addDebugLog(`📋 OneSignal対応: ${osSupported}`);
-      }
-    } catch (error) {
-      addDebugLog(`❌ OneSignalエラー: ${error}`);
-    }
-    
-    // Service Worker状態
-    if (serviceWorkerSupport) {
-      try {
-        const registration = await navigator.serviceWorker.getRegistration();
-        addDebugLog(`🔧 SW登録: ${registration ? '済' : '未'}`);
-        if (registration) {
-          addDebugLog(`🔧 SW状態: ${registration.active ? 'アクティブ' : 'インアクティブ'}`);
-        }
-      } catch (error) {
-        addDebugLog(`❌ SWエラー: ${error}`);
-      }
-    }
-    
-    setShowDebugPanel(true);
-  };
-
-  // 詳細診断機能（従来版）
-  const runDiagnostics = () => {
-    const isPWA = window.matchMedia('(display-mode: standalone)').matches;
-    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-    const notificationSupport = 'Notification' in window;
-    const permission = notificationSupport ? Notification.permission : 'not-supported';
-    const serviceWorkerSupport = 'serviceWorker' in navigator;
-    
-    const diagnosis = `
-📱 デバイス情報:
-• iOS: ${isIOS ? 'はい' : 'いいえ'}
-• PWAモード: ${isPWA ? 'はい' : 'いいえ'}
-• User Agent: ${navigator.userAgent.substring(0, 50)}...
-
-🔔 通知機能:
-• 通知API対応: ${notificationSupport ? 'はい' : 'いいえ'}
-• 通知許可状態: ${permission}
-• Service Worker対応: ${serviceWorkerSupport ? 'はい' : 'いいえ'}
-
-⚙️ アプリ設定:
-• 通知設定: ${notificationSettings.enabled ? 'ON' : 'OFF'}
-• 朝の通知: ${notificationSettings.morning}
-• 午後の通知: ${notificationSettings.afternoon}
-• 夜の通知: ${notificationSettings.evening}
-
-💡 推奨事項:
-${!isPWA && isIOS ? '⚠️ PWAとしてインストールしてください' : ''}
-${permission !== 'granted' ? '⚠️ 通知許可が必要です' : ''}
-    `.trim();
-    
-    alert(diagnosis);
-  };
-
-  const resetProgress = () => {
-    if (confirm('本当に進捗をリセットしますか？この操作は元に戻せません。')) {
-      localStorage.removeItem('studyquest_user');
-      localStorage.removeItem('studyquest_tasks');
-      localStorage.removeItem('studyquest_exams');
-      window.location.href = '/';
-    }
-  };
-
-  const useStreakProtection = () => {
-    if (userData.streakProtection > 0) {
-      const { useStreakProtection } = require('@/lib/streakManager');
-      if (useStreakProtection()) {
-        setUserData(getUserData());
-        alert('ストリーク保護券を使用しました！');
-      }
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-indigo-900 px-4 py-6">
-      <div className="max-w-md mx-auto">
-        <BackButton />
-        
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-4 space-y-6"
-        >
-          <div className="text-center">
-            <div className="text-4xl mb-2">⚙️</div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              設定
-            </h1>
-          </div>
+    <ClientOnly>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-indigo-900 p-4">
+        <div className="max-w-md mx-auto">
+          <BackButton />
+          
+          <motion.div 
+            className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 space-y-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <div className="text-center">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                ⚙️ 設定
+              </h1>
+              <p className="text-gray-600 dark:text-gray-300">
+                通知設定とアカウント情報
+              </p>
+            </div>
 
-          {/* 通知設定 */}
-          <ClientOnly fallback={
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg animate-pulse">
-              <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
-            </div>
-          }>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              🔔 通知設定
-            </h3>
-            
-            {/* デバッグ情報 */}
-            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-xs">
-              <p className="text-blue-800 dark:text-blue-200 mb-1">
-                📊 通知システム状態
-              </p>
-              <p className="text-blue-600 dark:text-blue-300">
-                OneSignal: {process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ? '✅ 設定済み' : '❌ 未設定'}
-              </p>
-              <p className="text-blue-600 dark:text-blue-300">
-                通知権限: {notificationSettings.enabled ? '✅ 許可' : '⏸️ 未許可'}
-              </p>
-              <p className="text-blue-600 dark:text-blue-300">
-                ブラウザ権限: {typeof window !== 'undefined' && 'Notification' in window ? 
-                  (Notification.permission === 'granted' ? '✅ 許可' : 
-                   Notification.permission === 'denied' ? '❌ 拒否' : '⏸️ 未設定') : 
-                  '❓ 不明'}
-              </p>
-              {!process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID && (
-                <p className="text-red-600 dark:text-red-400 mt-2">
-                  ⚠️ Vercel環境変数にOneSignal App IDを設定してください
-                </p>
-              )}
-              {typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'denied' && (
-                <p className="text-orange-600 dark:text-orange-400 mt-2">
-                  ⚠️ ブラウザで通知が拒否されています。ブラウザの設定で許可してください。
-                </p>
-              )}
-            </div>
-            
+            {/* バックグラウンド通知設定 */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-700 dark:text-gray-300">プッシュ通知</span>
-                <button
-                  onClick={handleNotificationPermission}
-                  className={`px-4 py-2 rounded-lg font-medium ${
-                    notificationSettings.enabled
-                      ? 'bg-green-500 text-white'
-                      : 'bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  {notificationSettings.enabled ? 'ON' : 'OFF'}
-                </button>
-              </div>
-
-              {notificationSettings.enabled && (
-                <>
-                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                    <div className="mb-3">
-                      <button
-                        onClick={handleScheduledTest}
-                        className="w-full px-3 py-2 bg-indigo-500 text-white rounded-lg text-sm font-medium hover:bg-indigo-600 transition-colors"
-                      >
-                        📱 OneSignalテスト通知
-                      </button>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        ※OneSignal経由で通知が届くか確認できます
-                      </p>
-                    </div>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">朝の通知</span>
-                        <input
-                          type="time"
-                          value={notificationSettings.morning}
-                          onChange={(e) => updateNotificationTime('morning', e.target.value)}
-                          className="px-3 py-1 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        />
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">午後の通知</span>
-                        <input
-                          type="time"
-                          value={notificationSettings.afternoon}
-                          onChange={(e) => updateNotificationTime('afternoon', e.target.value)}
-                          className="px-3 py-1 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        />
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">夜の通知</span>
-                        <input
-                          type="time"
-                          value={notificationSettings.evening}
-                          onChange={(e) => updateNotificationTime('evening', e.target.value)}
-                          className="px-3 py-1 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        />
-                      </div>
-                      
-                      <button
-                        onClick={rescheduleNotifications}
-                        className="w-full px-3 py-2 bg-gray-500 text-white rounded-lg text-sm font-medium hover:bg-gray-600 transition-colors mt-3"
-                      >
-                        🔄 通知を再スケジュール
-                      </button>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        ※時刻を変更した後にタップしてください
-                      </p>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* アカウント情報 */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              👤 アカウント情報
-            </h3>
-            
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">レベル</span>
-                <span className="font-semibold text-gray-900 dark:text-white">{userData.level}</span>
-              </div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                🔔 バックグラウンド通知
+              </h2>
               
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">経験値</span>
-                <span className="font-semibold text-gray-900 dark:text-white">{userData.exp} EXP</span>
-              </div>
-              
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">現在のストリーク</span>
-                <span className="font-semibold text-gray-900 dark:text-white">{userData.currentStreak}日</span>
-              </div>
-              
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">最大ストリーク</span>
-                <span className="font-semibold text-gray-900 dark:text-white">{userData.maxStreak}日</span>
-              </div>
-              
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">完了タスク数</span>
-                <span className="font-semibold text-gray-900 dark:text-white">{userData.totalTasksCompleted}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* ストリーク保護 */}
-          {userData.streakProtection > 0 && (
-            <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-2xl p-6 text-white shadow-lg">
-              <h3 className="text-lg font-semibold mb-2">
-                🛡️ ストリーク保護券
-              </h3>
-              <p className="text-sm opacity-90 mb-4">
-                体調不良などでストリークが途切れそうな時に使用できます
-              </p>
-              <div className="flex items-center justify-between">
-                <span className="font-semibold">保有数: {userData.streakProtection}枚</span>
-                <button
-                  onClick={useStreakProtection}
-                  className="px-4 py-2 bg-white/20 rounded-lg font-medium hover:bg-white/30 transition-colors"
-                >
-                  使用する
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* バッジ */}
-          {userData.badges.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                🏆 獲得バッジ
-              </h3>
-              <div className="grid grid-cols-2 gap-3">
-                {userData.badges.map((badge, index) => (
-                  <div key={index} className="flex items-center space-x-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                    <span className="text-2xl">
-                      {badge.includes('bronze') ? '🥉' : 
-                       badge.includes('silver') ? '🥈' : 
-                       badge.includes('gold') ? '🥇' : 
-                       badge.includes('platinum') ? '💎' : '🎖️'}
-                    </span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {badge.includes('bronze') ? '3日連続' : 
-                       badge.includes('silver') ? '1週間連続' : 
-                       badge.includes('gold') ? '2週間連続' : 
-                       badge.includes('platinum') ? '1ヶ月連続' : 'バッジ'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 🚀 ネイティブバックグラウンド通知システム */}
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-2xl p-6 shadow-lg">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              🚀 バックグラウンド通知（推奨）
-            </h3>
-            <div className="space-y-3">
-              {!notificationSettings.enabled ? (
-                <button
-                  onClick={setupNativePushNotifications}
-                  className="w-full px-4 py-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors"
-                >
-                  🔔 バックグラウンド通知を有効化
-                </button>
-              ) : (
-                <>
+              <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4">
+                <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
+                  アプリが閉じていても指定時刻に学習リマインダーが届きます
+                </p>
+                
+                {!notificationSettings.enabled ? (
                   <button
-                    onClick={sendNativeTestNotification}
-                    className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
+                    onClick={setupBackgroundNotifications}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
                   >
-                    🧪 バックグラウンド通知テスト
+                    🚀 バックグラウンド通知を有効にする
                   </button>
-                  <button
-                    onClick={disableNativePushNotifications}
-                    className="w-full px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors"
-                  >
-                    🔕 バックグラウンド通知を無効化
-                  </button>
-                </>
-              )}
-            </div>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-3">
-              ※OneSignalに依存しない確実なバックグラウンド通知システムです
-            </p>
-          </div>
-
-          {/* iPhoneデバッグパネル */}
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-2xl p-6 shadow-lg">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              🔍 iPhone通知デバッグ
-            </h3>
-            <div className="space-y-3">
-              <button
-                onClick={runIOSDetailedDiagnostics}
-                className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
-              >
-                📱 iPhone詳細診断実行
-              </button>
-              <button
-                onClick={requestDirectBrowserPermission}
-                className="w-full px-4 py-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors"
-              >
-                🔔 ブラウザ権限を直接リクエスト
-              </button>
-              <button
-                onClick={forceOneSignalInit}
-                className="w-full px-4 py-3 bg-purple-500 text-white rounded-lg font-medium hover:bg-purple-600 transition-colors"
-              >
-                🔧 OneSignal手動初期化
-              </button>
-              <button
-                onClick={() => setShowDebugPanel(!showDebugPanel)}
-                className="w-full px-4 py-2 bg-gray-500 text-white rounded-lg font-medium hover:bg-gray-600 transition-colors"
-              >
-                {showDebugPanel ? '📝 ログを隠す' : '📝 ログを表示'}
-              </button>
-              <button
-                onClick={() => setDebugLogs([])}
-                className="w-full px-4 py-2 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
-              >
-                🗑️ ログをクリア
-              </button>
-            </div>
-            
-            {showDebugPanel && (
-              <div className="mt-4 p-3 bg-black text-green-400 rounded-lg font-mono text-xs max-h-64 overflow-y-auto">
-                <p className="text-yellow-400 mb-2">🔍 デバッグログ (最新10件)</p>
-                {debugLogs.length === 0 ? (
-                  <p className="text-gray-400">ログがありません</p>
                 ) : (
-                  debugLogs.map((log, index) => (
-                    <p key={index} className="mb-1 whitespace-pre-wrap">{log}</p>
-                  ))
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-green-700 dark:text-green-300 font-medium">
+                        ✅ 有効
+                      </span>
+                      <button
+                        onClick={disableBackgroundNotifications}
+                        className="bg-red-500 hover:bg-red-600 text-white text-sm py-1 px-3 rounded"
+                      >
+                        無効にする
+                      </button>
+                    </div>
+                    
+                    <button
+                      onClick={sendTestPushNotification}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                    >
+                      🧪 テスト通知を送信
+                    </button>
+                  </div>
                 )}
               </div>
-            )}
-          </div>
 
-          {/* リセット */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              🔄 データ管理
-            </h3>
-            <button
-              onClick={resetProgress}
-              className="w-full px-4 py-3 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors"
-            >
-              全データをリセット
-            </button>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              ※この操作は元に戻せません
-            </p>
-          </div>
-          </ClientOnly>
-        </motion.div>
+              {/* 通知時刻設定 */}
+              {notificationSettings.enabled && (
+                <div className="space-y-3">
+                  <h3 className="font-medium text-gray-900 dark:text-white">通知時刻設定</h3>
+                  
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600 dark:text-gray-300">🌅 朝</span>
+                      <input
+                        type="time"
+                        value={notificationSettings.morning}
+                        onChange={(e) => updateNotificationTime('morning', e.target.value)}
+                        className="bg-gray-50 border border-gray-300 rounded px-3 py-1 text-sm"
+                      />
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600 dark:text-gray-300">📚 午後</span>
+                      <input
+                        type="time"
+                        value={notificationSettings.afternoon}
+                        onChange={(e) => updateNotificationTime('afternoon', e.target.value)}
+                        className="bg-gray-50 border border-gray-300 rounded px-3 py-1 text-sm"
+                      />
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600 dark:text-gray-300">🌙 夜</span>
+                      <input
+                        type="time"
+                        value={notificationSettings.evening}
+                        onChange={(e) => updateNotificationTime('evening', e.target.value)}
+                        className="bg-gray-50 border border-gray-300 rounded px-3 py-1 text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ユーザー統計 */}
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                📊 学習統計
+              </h2>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-indigo-50 dark:bg-indigo-900/30 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                    {userData.level}
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-300">レベル</div>
+                </div>
+                
+                <div className="bg-emerald-50 dark:bg-emerald-900/30 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                    {userData.currentStreak}
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-300">連続日数</div>
+                </div>
+                
+                <div className="bg-amber-50 dark:bg-amber-900/30 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                    {userData.exp}
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-300">EXP</div>
+                </div>
+                
+                <div className="bg-purple-50 dark:bg-purple-900/30 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                    {userData.totalTasksCompleted}
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-300">総タスク</div>
+                </div>
+              </div>
+            </div>
+
+            {/* デバッグパネル */}
+            <div className="space-y-4">
+              <button
+                onClick={() => setShowDebugPanel(!showDebugPanel)}
+                className="w-full bg-gray-600 hover:bg-gray-700 text-white text-sm py-2 px-4 rounded-lg transition-colors"
+              >
+                🔧 デバッグログ（最新10件）
+              </button>
+              
+              {showDebugPanel && (
+                <div className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs font-mono max-h-96 overflow-y-auto">
+                  <div className="mb-2 text-gray-300">デバッグログ（最新10件）</div>
+                  {debugLogs.map((log, index) => (
+                    <div key={index} className="py-1 border-b border-gray-700">
+                      {log}
+                    </div>
+                  ))}
+                  {debugLogs.length === 0 && (
+                    <div className="text-gray-500">ログはありません</div>
+                  )}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </div>
       </div>
-    </div>
+    </ClientOnly>
   );
 }
