@@ -122,6 +122,50 @@ export default function SettingsPage() {
     }, 5000);
   };
 
+  // 詳細診断機能
+  const runDiagnostics = () => {
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches;
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const notificationSupport = 'Notification' in window;
+    const permission = notificationSupport ? Notification.permission : 'not-supported';
+    const serviceWorkerSupport = 'serviceWorker' in navigator;
+    
+    let serviceWorkerStatus = 'not-supported';
+    if (serviceWorkerSupport) {
+      navigator.serviceWorker.getRegistration().then(registration => {
+        if (registration) {
+          serviceWorkerStatus = 'registered';
+        } else {
+          serviceWorkerStatus = 'not-registered';
+        }
+      });
+    }
+    
+    const diagnosis = `
+📱 デバイス情報:
+• iOS: ${isIOS ? 'はい' : 'いいえ'}
+• PWAモード: ${isPWA ? 'はい' : 'いいえ'}
+• User Agent: ${navigator.userAgent.substring(0, 50)}...
+
+🔔 通知機能:
+• 通知API対応: ${notificationSupport ? 'はい' : 'いいえ'}
+• 通知許可状態: ${permission}
+• Service Worker対応: ${serviceWorkerSupport ? 'はい' : 'いいえ'}
+
+⚙️ アプリ設定:
+• 通知設定: ${notificationSettings.enabled ? 'ON' : 'OFF'}
+• 朝の通知: ${notificationSettings.morning}
+• 午後の通知: ${notificationSettings.afternoon}
+• 夜の通知: ${notificationSettings.evening}
+
+💡 推奨事項:
+${!isPWA && isIOS ? '⚠️ PWAとしてインストールしてください' : ''}
+${permission !== 'granted' ? '⚠️ 通知許可が必要です' : ''}
+    `.trim();
+    
+    alert(diagnosis);
+  };
+
   const resetProgress = () => {
     if (confirm('本当に進捗をリセットしますか？この操作は元に戻せません。')) {
       localStorage.removeItem('studyquest_user');
@@ -199,6 +243,12 @@ export default function SettingsPage() {
                         className="w-full px-3 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
                       >
                         ⏱️ 5秒後にテスト通知
+                      </button>
+                      <button
+                        onClick={runDiagnostics}
+                        className="w-full px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
+                      >
+                        🔍 通知診断を実行
                       </button>
                     </div>
                     <div className="space-y-3">
