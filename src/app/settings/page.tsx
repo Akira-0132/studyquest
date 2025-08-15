@@ -46,21 +46,34 @@ export default function SettingsPage() {
 
   const requestNotificationPermission = async () => {
     if ('Notification' in window) {
-      const permission = await Notification.requestPermission();
-      const enabled = permission === 'granted';
-      
-      const newSettings = { ...notificationSettings, enabled };
-      setNotificationSettings(newSettings);
-      localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
-      
-      if (enabled) {
-        // 通知を有効にした場合、スケジューリングを開始
-        scheduleLocalNotifications();
-        // テスト通知を表示
-        setTimeout(() => {
-          testNotification();
-        }, 1000);
+      try {
+        console.log('現在の通知許可状態:', Notification.permission);
+        const permission = await Notification.requestPermission();
+        console.log('リクエスト後の通知許可状態:', permission);
+        
+        const enabled = permission === 'granted';
+        
+        const newSettings = { ...notificationSettings, enabled };
+        setNotificationSettings(newSettings);
+        localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
+        
+        if (enabled) {
+          // 通知を有効にした場合、スケジューリングを開始
+          scheduleLocalNotifications();
+          // テスト通知を表示
+          setTimeout(() => {
+            testNotification();
+          }, 1000);
+          alert('通知が有効になりました！');
+        } else {
+          alert(`通知許可が拒否されました。状態: ${permission}\nブラウザの設定から手動で許可してください。`);
+        }
+      } catch (error) {
+        console.error('通知許可エラー:', error);
+        alert(`エラーが発生しました: ${error}`);
       }
+    } else {
+      alert('このブラウザは通知をサポートしていません。');
     }
   };
 
