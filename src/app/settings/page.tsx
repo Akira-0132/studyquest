@@ -31,6 +31,37 @@ export default function SettingsPage() {
     badges: [] as string[],
   });
 
+  // デバッグログを画面に表示するためのstate
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+
+  // コンソールログをキャプチャして画面に表示
+  const addDebugLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setDebugLogs(prev => [...prev.slice(-9), `${timestamp}: ${message}`]);
+  };
+
+  // コンソールログをオーバーライド
+  useEffect(() => {
+    const originalLog = console.log;
+    const originalError = console.error;
+    
+    console.log = (...args) => {
+      originalLog(...args);
+      addDebugLog('LOG: ' + args.join(' '));
+    };
+    
+    console.error = (...args) => {
+      originalError(...args);
+      addDebugLog('ERROR: ' + args.join(' '));
+    };
+    
+    return () => {
+      console.log = originalLog;
+      console.error = originalError;
+    };
+  }, []);
+
   useEffect(() => {
     // ユーザーデータを読み込み
     setUserData(getUserData());
@@ -152,24 +183,61 @@ export default function SettingsPage() {
     alert('OneSignal通知設定を更新しました。\n\n設定した時刻に通知が届きます。');
   };
 
-  // 詳細診断機能
-  const runDiagnostics = () => {
+  // iPhone専用の詳細診断機能
+  const runIOSDetailedDiagnostics = async () => {
     const isPWA = window.matchMedia('(display-mode: standalone)').matches;
     const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
     const notificationSupport = 'Notification' in window;
     const permission = notificationSupport ? Notification.permission : 'not-supported';
     const serviceWorkerSupport = 'serviceWorker' in navigator;
     
-    let serviceWorkerStatus = 'not-supported';
-    if (serviceWorkerSupport) {
-      navigator.serviceWorker.getRegistration().then(registration => {
-        if (registration) {
-          serviceWorkerStatus = 'registered';
-        } else {
-          serviceWorkerStatus = 'not-registered';
-        }
-      });
+    addDebugLog('🔍 詳細診断開始');
+    addDebugLog(`📱 デバイス: ${isIOS ? 'iOS' : 'その他'}`);
+    addDebugLog(`🖥️ PWAモード: ${isPWA}`);
+    addDebugLog(`🔔 通知API: ${notificationSupport}`);
+    addDebugLog(`✅ ブラウザ権限: ${permission}`);
+    
+    // OneSignalの状態チェック
+    try {
+      const oneSignalReady = await isOneSignalInitialized();
+      addDebugLog(`🔄 OneSignal初期化: ${oneSignalReady}`);
+      
+      if (oneSignalReady && window.OneSignal) {
+        const osPermission = await window.OneSignal.getNotificationPermission();
+        const osSubscribed = await window.OneSignal.isPushNotificationsEnabled();
+        const osSupported = await window.OneSignal.isPushNotificationsSupported();
+        
+        addDebugLog(`📋 OneSignal権限: ${osPermission}`);
+        addDebugLog(`📋 OneSignal購読: ${osSubscribed}`);
+        addDebugLog(`📋 OneSignal対応: ${osSupported}`);
+      }
+    } catch (error) {
+      addDebugLog(`❌ OneSignalエラー: ${error}`);
     }
+    
+    // Service Worker状態
+    if (serviceWorkerSupport) {
+      try {
+        const registration = await navigator.serviceWorker.getRegistration();
+        addDebugLog(`🔧 SW登録: ${registration ? '済' : '未'}`);
+        if (registration) {
+          addDebugLog(`🔧 SW状態: ${registration.active ? 'アクティブ' : 'インアクティブ'}`);
+        }
+      } catch (error) {
+        addDebugLog(`❌ SWエラー: ${error}`);
+      }
+    }
+    
+    setShowDebugPanel(true);
+  };
+
+  // 詳細診断機能（従来版）
+  const runDiagnostics = () => {
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches;
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const notificationSupport = 'Notification' in window;
+    const permission = notificationSupport ? Notification.permission : 'not-supported';
+    const serviceWorkerSupport = 'serviceWorker' in navigator;
     
     const diagnosis = `
 📱 デバイス情報:
@@ -429,6 +497,46 @@ ${permission !== 'granted' ? '⚠️ 通知許可が必要です' : ''}
               </div>
             </div>
           )}
+
+          {/* iPhoneデバッグパネル */}
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-2xl p-6 shadow-lg">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              🔍 iPhone通知デバッグ
+            </h3>
+            <div className="space-y-3">
+              <button
+                onClick={runIOSDetailedDiagnostics}
+                className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
+              >
+                📱 iPhone詳細診断実行
+              </button>
+              <button
+                onClick={() => setShowDebugPanel(!showDebugPanel)}
+                className="w-full px-4 py-2 bg-gray-500 text-white rounded-lg font-medium hover:bg-gray-600 transition-colors"
+              >
+                {showDebugPanel ? '📝 ログを隠す' : '📝 ログを表示'}
+              </button>
+              <button
+                onClick={() => setDebugLogs([])}
+                className="w-full px-4 py-2 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
+              >
+                🗑️ ログをクリア
+              </button>
+            </div>
+            
+            {showDebugPanel && (
+              <div className="mt-4 p-3 bg-black text-green-400 rounded-lg font-mono text-xs max-h-64 overflow-y-auto">
+                <p className="text-yellow-400 mb-2">🔍 デバッグログ (最新10件)</p>
+                {debugLogs.length === 0 ? (
+                  <p className="text-gray-400">ログがありません</p>
+                ) : (
+                  debugLogs.map((log, index) => (
+                    <p key={index} className="mb-1 whitespace-pre-wrap">{log}</p>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
 
           {/* リセット */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
