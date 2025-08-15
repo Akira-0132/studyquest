@@ -77,24 +77,45 @@ export default function SettingsPage() {
 
   const handleNotificationPermission = async () => {
     try {
-      console.log('OneSignal通知権限をリクエスト中...');
+      console.log('🔔 OneSignal通知権限をリクエスト中...');
+      
+      if (notificationSettings.enabled) {
+        // 通知を無効にする場合
+        const success = await toggleOneSignalNotifications(false);
+        if (success) {
+          const newSettings = { ...notificationSettings, enabled: false };
+          setNotificationSettings(newSettings);
+          localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
+          alert('🔕 通知を無効にしました。');
+        } else {
+          alert('通知の無効化に失敗しました。');
+        }
+        return;
+      }
+      
+      // 通知を有効にする場合
       const enabled = await requestOneSignalPermission();
       
-      const newSettings = { ...notificationSettings, enabled };
-      setNotificationSettings(newSettings);
-      localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
+      // 少し待ってから状態を再確認
+      setTimeout(async () => {
+        const actualState = await getOneSignalPermissionState();
+        const newSettings = { ...notificationSettings, enabled: actualState };
+        setNotificationSettings(newSettings);
+        localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
+        
+        if (actualState) {
+          // OneSignalの設定を更新
+          await updateOneSignalNotificationSettings(newSettings);
+          // テスト通知を送信
+          await sendOneSignalTestNotification('🎉 OneSignal通知が有効になりました！');
+          alert('✅ 通知が有効になりました！\n\n指定時刻に通知が届きます。\nバックグラウンドでも確実に動作します。');
+        } else {
+          alert('❌ 通知権限が拒否されました。\n\nブラウザの設定から手動で許可してください。\n\n【設定方法】\n1. ブラウザの設定を開く\n2. プライバシーとセキュリティ\n3. サイトの設定\n4. 通知\n5. このサイトを許可リストに追加');
+        }
+      }, 1000);
       
-      if (enabled) {
-        // OneSignalの設定を更新
-        await updateOneSignalNotificationSettings(newSettings);
-        // テスト通知を送信
-        await sendOneSignalTestNotification('🎉 OneSignal通知が有効になりました！');
-        alert('通知が有効になりました！\n\n指定時刻に通知が届きます。\nバックグラウンドでも確実に動作します。');
-      } else {
-        alert('通知権限が拒否されました。\nブラウザの設定から手動で許可してください。');
-      }
     } catch (error) {
-      console.error('通知許可エラー:', error);
+      console.error('❌ 通知許可エラー:', error);
       alert(`エラーが発生しました: ${error}`);
     }
   };
@@ -233,9 +254,20 @@ ${permission !== 'granted' ? '⚠️ 通知許可が必要です' : ''}
               <p className="text-blue-600 dark:text-blue-300">
                 通知権限: {notificationSettings.enabled ? '✅ 許可' : '⏸️ 未許可'}
               </p>
+              <p className="text-blue-600 dark:text-blue-300">
+                ブラウザ権限: {typeof window !== 'undefined' && 'Notification' in window ? 
+                  (Notification.permission === 'granted' ? '✅ 許可' : 
+                   Notification.permission === 'denied' ? '❌ 拒否' : '⏸️ 未設定') : 
+                  '❓ 不明'}
+              </p>
               {!process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID && (
                 <p className="text-red-600 dark:text-red-400 mt-2">
                   ⚠️ Vercel環境変数にOneSignal App IDを設定してください
+                </p>
+              )}
+              {typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'denied' && (
+                <p className="text-orange-600 dark:text-orange-400 mt-2">
+                  ⚠️ ブラウザで通知が拒否されています。ブラウザの設定で許可してください。
                 </p>
               )}
             </div>

@@ -27,13 +27,13 @@ async function waitForOneSignal(timeout = 5000): Promise<boolean> {
  * OneSignalで通知権限をリクエスト
  */
 export async function requestOneSignalPermission(): Promise<boolean> {
-  console.log('requestOneSignalPermission called');
+  console.log('🔔 OneSignal通知権限をリクエスト中...');
   
   // OneSignalの初期化を待つ
   const isReady = await waitForOneSignal();
   
   if (!isReady) {
-    console.log('OneSignal not ready, using native permission request');
+    console.log('❌ OneSignal not ready, using native permission request');
     // フォールバック: 通常のWeb Notification APIを使用
     if ('Notification' in window) {
       const permission = await Notification.requestPermission();
@@ -45,38 +45,60 @@ export async function requestOneSignalPermission(): Promise<boolean> {
   try {
     // 現在の権限状態を確認
     const currentPermission = await window.OneSignal.getNotificationPermission();
-    console.log('Current permission:', currentPermission);
+    console.log('📋 Current OneSignal permission:', currentPermission);
+    
+    // 現在の購読状態も確認
+    const isSubscribed = await window.OneSignal.isPushNotificationsEnabled();
+    console.log('📋 Current subscription state:', isSubscribed);
     
     if (currentPermission === 'granted') {
-      // すでに許可されている場合は購読を有効化
-      await window.OneSignal.setSubscription(true);
+      if (!isSubscribed) {
+        // 権限はあるが購読されていない場合
+        console.log('✅ Permission granted, enabling subscription...');
+        await window.OneSignal.setSubscription(true);
+      }
       return true;
     }
     
-    // プロンプトを表示
-    console.log('Showing permission prompt...');
-    const permission = await window.OneSignal.showNativePrompt();
-    console.log('Permission result:', permission);
+    // 権限がない場合は新しいAPIを使用してプロンプトを表示
+    console.log('📝 Requesting notification permission...');
     
-    if (permission) {
-      // 購読を有効化
+    // 最新のAPIを使用
+    const permissionResult = await window.OneSignal.requestPermission();
+    console.log('📊 Permission request result:', permissionResult);
+    
+    if (permissionResult) {
+      // 購読も有効化
       await window.OneSignal.setSubscription(true);
+      console.log('✅ OneSignal subscription enabled');
       return true;
     }
     
     return false;
   } catch (error) {
-    console.error('OneSignal permission error:', error);
+    console.error('❌ OneSignal permission error:', error);
     
     // エラーの詳細を確認
     if (error && typeof error === 'object' && 'reason' in error) {
       console.error('Error reason:', (error as any).reason);
     }
     
-    // フォールバック
+    // フォールバック: ネイティブAPIを試す
+    console.log('🔄 Trying native Notification API as fallback...');
     if ('Notification' in window) {
       const permission = await Notification.requestPermission();
-      return permission === 'granted';
+      const granted = permission === 'granted';
+      
+      if (granted) {
+        try {
+          // ネイティブ権限が取得できた場合、OneSignalの購読も有効化を試す
+          await window.OneSignal.setSubscription(true);
+        } catch (e) {
+          console.log('Failed to enable OneSignal subscription, but native permission granted');
+        }
+      }
+      
+      return granted;
     }
     return false;
   }
@@ -187,12 +209,15 @@ export async function toggleOneSignalNotifications(enabled: boolean) {
  * 現在の通知権限状態を取得
  */
 export async function getOneSignalPermissionState(): Promise<boolean> {
-  const isReady = await waitForOneSignal(1000); // 短いタイムアウト
+  const isReady = await waitForOneSignal(2000); // タイムアウトを延長
   
   if (!isReady) {
+    console.log('⏰ OneSignal not ready, using native permission check');
     // フォールバック
     if ('Notification' in window) {
-      return Notification.permission === 'granted';
+      const nativePermission = Notification.permission === 'granted';
+      console.log('📋 Native permission state:', nativePermission);
+      return nativePermission;
     }
     return false;
   }
@@ -200,11 +225,21 @@ export async function getOneSignalPermissionState(): Promise<boolean> {
   try {
     const permission = await window.OneSignal.getNotificationPermission();
     const isSubscribed = await window.OneSignal.isPushNotificationsEnabled();
-    return permission === 'granted' && isSubscribed;
+    const result = permission === 'granted' && isSubscribed;
+    
+    console.log('📊 OneSignal permission details:', {
+      permission,
+      isSubscribed,
+      finalResult: result
+    });
+    
+    return result;
   } catch (error) {
-    console.error('Failed to get permission state:', error);
+    console.error('❌ Failed to get OneSignal permission state:', error);
     if ('Notification' in window) {
-      return Notification.permission === 'granted';
+      const nativePermission = Notification.permission === 'granted';
+      console.log('🔄 Fallback to native permission:', nativePermission);
+      return nativePermission;
     }
     return false;
   }

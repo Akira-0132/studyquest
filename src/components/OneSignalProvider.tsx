@@ -59,9 +59,17 @@ export function OneSignalProvider({ children }: { children: React.ReactNode }) {
                       actionMessage: "StudyQuestから学習リマインダーを受け取りますか？",
                       acceptButton: "許可する",
                       cancelButton: "今はしない"
+                    },
+                    delay: {
+                      pageViews: 1,
+                      timeDelay: 3
                     }
                   }
                 ]
+              },
+              native: {
+                enabled: true,
+                autoPrompt: false
               }
             }
           };
