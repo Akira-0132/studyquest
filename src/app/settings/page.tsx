@@ -199,9 +199,38 @@ export default function SettingsPage() {
         addDebugLog('🔄 OneSignal SDKの再読み込みを試行...');
         const script = document.createElement('script');
         script.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
-        script.onload = () => addDebugLog('✅ OneSignal SDK再読み込み完了');
+        script.onload = () => {
+          addDebugLog('✅ OneSignal SDK再読み込み完了');
+          // 読み込み後に少し待ってから再度初期化を試行
+          setTimeout(() => forceOneSignalInit(), 2000);
+        };
         script.onerror = () => addDebugLog('❌ OneSignal SDK再読み込み失敗');
         document.head.appendChild(script);
+        
+        return;
+      }
+      
+      // OneSignalオブジェクトは存在するが、メソッドが不完全な場合
+      if (!hasRequiredMethods) {
+        addDebugLog('⚠️ OneSignal SDKが不完全です。再読み込みを待機中...');
+        
+        // 少し待ってからメソッドが利用可能になるかチェック
+        let retryCount = 0;
+        const checkMethods = setInterval(() => {
+          retryCount++;
+          const methodsReady = typeof window.OneSignal.init === 'function' && 
+                              typeof window.OneSignal.getNotificationPermission === 'function';
+          
+          if (methodsReady) {
+            addDebugLog(`✅ OneSignalメソッド準備完了 (${retryCount}回目)`);
+            clearInterval(checkMethods);
+            // 再帰的に初期化を試行
+            setTimeout(() => forceOneSignalInit(), 500);
+          } else if (retryCount > 10) {
+            addDebugLog('❌ OneSignalメソッド準備タイムアウト');
+            clearInterval(checkMethods);
+          }
+        }, 500);
         
         return;
       }
@@ -215,9 +244,10 @@ export default function SettingsPage() {
         return;
       }
       
-      // 初期化状態確認
-      const isInitialized = await window.OneSignal.isPushNotificationsSupported();
-      addDebugLog(`📋 Push対応: ${isInitialized}`);
+      // 初期化状態確認（より安全なチェック）
+      const hasRequiredMethods = typeof window.OneSignal.init === 'function' && 
+                                 typeof window.OneSignal.getNotificationPermission === 'function';
+      addDebugLog(`📋 必要メソッド: ${hasRequiredMethods}`);
       
       // 手動で初期化設定を実行
       const initConfig = {

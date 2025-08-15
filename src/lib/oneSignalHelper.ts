@@ -9,17 +9,20 @@ async function waitForOneSignal(timeout = 5000): Promise<boolean> {
   while (Date.now() - startTime < timeout) {
     if (window.OneSignal) {
       try {
-        const initialized = await window.OneSignal.isPushNotificationsSupported();
-        if (initialized) {
+        // より確実な初期化チェック方法
+        if (typeof window.OneSignal.init === 'function' && 
+            typeof window.OneSignal.getNotificationPermission === 'function') {
           return true;
         }
       } catch (e) {
         // まだ初期化されていない
+        console.log('OneSignal loading...', e);
       }
     }
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 200)); // 待機時間を延長
   }
   
+  console.log('OneSignal timeout after', timeout, 'ms');
   return false;
 }
 
