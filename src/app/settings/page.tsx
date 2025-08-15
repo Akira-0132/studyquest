@@ -210,6 +210,20 @@ export default function SettingsPage() {
         return;
       }
       
+      // App ID確認
+      const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
+      addDebugLog(`🔑 使用するApp ID: ${appId ? appId.substring(0, 8) + '...' : '未設定'}`);
+      
+      if (!appId) {
+        addDebugLog('❌ OneSignal App IDが設定されていません');
+        return;
+      }
+      
+      // 初期化状態確認（より安全なチェック）
+      const hasRequiredMethods = typeof window.OneSignal.init === 'function' && 
+                                 typeof window.OneSignal.getNotificationPermission === 'function';
+      addDebugLog(`📋 必要メソッド: ${hasRequiredMethods}`);
+      
       // OneSignalオブジェクトは存在するが、メソッドが不完全な場合
       if (!hasRequiredMethods) {
         addDebugLog('⚠️ OneSignal SDKが不完全です。再読み込みを待機中...');
@@ -234,20 +248,6 @@ export default function SettingsPage() {
         
         return;
       }
-      
-      // App ID確認
-      const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
-      addDebugLog(`🔑 使用するApp ID: ${appId ? appId.substring(0, 8) + '...' : '未設定'}`);
-      
-      if (!appId) {
-        addDebugLog('❌ OneSignal App IDが設定されていません');
-        return;
-      }
-      
-      // 初期化状態確認（より安全なチェック）
-      const hasRequiredMethods = typeof window.OneSignal.init === 'function' && 
-                                 typeof window.OneSignal.getNotificationPermission === 'function';
-      addDebugLog(`📋 必要メソッド: ${hasRequiredMethods}`);
       
       // 手動で初期化設定を実行
       const initConfig = {
