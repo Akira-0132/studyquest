@@ -11,11 +11,11 @@ import {
   sendTestNotification,
   getPushPermissionState,
   getActiveSubscription,
-  scheduleNotifications,
   isiOSSafariPWA,
   isPWAInstalled,
   isiOSNotificationSupported
 } from '@/lib/nativePushManager';
+import { scheduleNotifications } from '@/lib/pushNotificationManager';
 import { iosNotificationWorkaround } from '@/lib/iosNotificationWorkaround';
 import { IOSPWAGuide } from '@/components/IOSPWAGuide';
 
