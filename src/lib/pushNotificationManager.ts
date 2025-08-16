@@ -144,12 +144,28 @@ export async function scheduleNotifications() {
     // 設定をIndexedDBに同期
     await syncNotificationSettings();
     
-    // Service Workerにメッセージを送信
+    // Service Workerにメッセージを送信（安全なJSON形式）
     if (navigator.serviceWorker.controller) {
-      navigator.serviceWorker.controller.postMessage({
-        type: 'SCHEDULE_NOTIFICATIONS',
-        settings: settings
-      });
+      try {
+        const safeSettings = {
+          ...settings,
+          schedule: settings.schedule || {
+            morning: '07:00',
+            afternoon: '16:00', 
+            evening: '20:00'
+          }
+        };
+        
+        navigator.serviceWorker.controller.postMessage({
+          type: 'SCHEDULE_NOTIFICATIONS',
+          settings: safeSettings
+        });
+        
+        console.log('✅ スケジュール設定を Service Worker に送信:', safeSettings);
+      } catch (error) {
+        console.error('❌ Service Worker メッセージ送信エラー:', error);
+        throw error;
+      }
     }
     
     console.log('Notifications scheduled successfully');
