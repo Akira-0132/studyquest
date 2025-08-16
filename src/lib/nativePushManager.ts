@@ -271,7 +271,7 @@ export async function subscribeToPush(): Promise<PushSubscription | null> {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            subscription: subscription.toJSON(),
+            subscription: safeSubscriptionToJSON(subscription),
             title: 'Test',
             body: 'Subscription validation'
           })
@@ -398,72 +398,132 @@ export async function unsubscribeFromPush(): Promise<boolean> {
 }
 
 /**
- * テスト通知を送信
+ * テスト通知を送信（iOS Safari PWA対応強化版）
  */
 export async function sendTestNotification(title: string, body: string): Promise<boolean> {
+  console.log('🧪 Starting test notification (iOS safe version)...');
+  
   try {
     const registration = await navigator.serviceWorker.getRegistration();
-    if (!registration) return false;
-
-    const subscription = await registration.pushManager.getSubscription();
-    if (!subscription) {
-      console.error('No push subscription available');
+    if (!registration) {
+      console.error('❌ No service worker registration found');
       return false;
     }
 
+    const subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      console.error('❌ No push subscription available');
+      return false;
+    }
+
+    console.log('📋 Converting subscription for test notification...');
+    const subscriptionData = safeSubscriptionToJSON(subscription);
+    
+    if (!subscriptionData.endpoint) {
+      console.error('❌ Invalid subscription data: missing endpoint');
+      return false;
+    }
+
+    console.log('📤 Sending test notification request...');
     const response = await fetch('/api/send-notification', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        subscription: subscription.toJSON(),
+        subscription: subscriptionData,
         title,
         body
       })
     });
 
-    const result = await response.json();
-    console.log('Test notification result:', result);
+    console.log('📥 Test notification response status:', response.status);
     
-    return response.ok;
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Test notification request failed:', errorText);
+      return false;
+    }
+
+    const result = await response.json();
+    console.log('✅ Test notification result:', result);
+    
+    return true;
 
   } catch (error) {
-    console.error('Test notification failed:', error);
+    console.error('❌ Test notification failed:', error);
+    console.error('- Error name:', (error as Error).name);
+    console.error('- Error message:', (error as Error).message);
+    
+    // iOS特有のエラー分析
+    if (isiOSSafariPWA() && (error as Error).message.includes('SyntaxError')) {
+      console.error('🚨 Detected iOS Safari PWA subscription bug');
+    }
+    
     return false;
   }
 }
 
 /**
- * スケジュール通知を設定
+ * スケジュール通知を設定（iOS Safari PWA対応強化版）
  */
 export async function scheduleNotifications(settings: {
   morning: string;
   afternoon: string;
   evening: string;
 }): Promise<boolean> {
+  console.log('📅 Starting schedule notifications setup (iOS safe version)...');
+  
   try {
     const subscription = await getActiveSubscription();
-    if (!subscription) return false;
+    if (!subscription) {
+      console.error('❌ No active subscription found');
+      return false;
+    }
 
+    console.log('📋 Converting subscription for schedule setup...');
+    const subscriptionData = safeSubscriptionToJSON(subscription);
+    
+    if (!subscriptionData.endpoint) {
+      console.error('❌ Invalid subscription data: missing endpoint');
+      return false;
+    }
+
+    console.log('📤 Sending schedule notifications request...');
     const response = await fetch('/api/schedule-notifications', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        subscription: subscription.toJSON(),
+        subscription: subscriptionData,
         schedule: settings
       })
     });
 
-    const result = await response.json();
-    console.log('Schedule notifications result:', result);
+    console.log('📥 Schedule notifications response status:', response.status);
     
-    return response.ok;
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Schedule notifications request failed:', errorText);
+      return false;
+    }
+
+    const result = await response.json();
+    console.log('✅ Schedule notifications result:', result);
+    
+    return true;
 
   } catch (error) {
-    console.error('Schedule notifications failed:', error);
+    console.error('❌ Schedule notifications failed:', error);
+    console.error('- Error name:', (error as Error).name);
+    console.error('- Error message:', (error as Error).message);
+    
+    // iOS特有のエラー分析
+    if (isiOSSafariPWA() && (error as Error).message.includes('SyntaxError')) {
+      console.error('🚨 Detected iOS Safari PWA subscription bug');
+    }
+    
     return false;
   }
 }
@@ -494,6 +554,59 @@ export async function getActiveSubscription(): Promise<PushSubscription | null> 
 }
 
 /**
+ * iOS Safari PWA対応: 安全なサブスクリプション変換
+ * subscription.toJSON()がSyntaxErrorを投げる場合の回避策
+ */
+function safeSubscriptionToJSON(subscription: PushSubscription): any {
+  console.log('🔄 Converting subscription to JSON (iOS safe version)...');
+  
+  try {
+    // 標準的な変換を試行
+    const jsonData = subscription.toJSON();
+    console.log('✅ Standard toJSON() conversion successful');
+    return jsonData;
+  } catch (error) {
+    console.warn('⚠️ Standard toJSON() failed, using manual conversion:', error);
+    
+    // iOS Safari PWA バグ回避: 手動でオブジェクトを構築
+    try {
+      const manualData = {
+        endpoint: subscription.endpoint,
+        keys: {
+          p256dh: subscription.getKey('p256dh') 
+            ? btoa(String.fromCharCode(...new Uint8Array(subscription.getKey('p256dh')!)))
+            : '',
+          auth: subscription.getKey('auth') 
+            ? btoa(String.fromCharCode(...new Uint8Array(subscription.getKey('auth')!)))
+            : ''
+        }
+      };
+      
+      console.log('🔧 Manual subscription object constructed successfully');
+      console.log('- Endpoint length:', manualData.endpoint.length);
+      console.log('- p256dh key available:', !!manualData.keys.p256dh);
+      console.log('- auth key available:', !!manualData.keys.auth);
+      
+      return manualData;
+    } catch (manualError) {
+      console.error('❌ Manual subscription conversion also failed:', manualError);
+      
+      // 最後の手段: 基本的な情報のみ
+      const fallbackData = {
+        endpoint: subscription.endpoint || '',
+        keys: {
+          p256dh: '',
+          auth: ''
+        }
+      };
+      
+      console.warn('🚨 Using fallback subscription data (keys may be missing)');
+      return fallbackData;
+    }
+  }
+}
+
+/**
  * VAPID公開鍵をUint8Arrayに変換
  */
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -512,51 +625,83 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 /**
- * サーバーに購読情報を保存
+ * サーバーに購読情報を保存（iOS Safari PWA対応強化版）
  */
 async function saveSubscriptionToServer(subscription: PushSubscription): Promise<void> {
+  console.log('💾 Saving subscription to server (iOS safe version)...');
+  
   try {
+    const subscriptionData = safeSubscriptionToJSON(subscription);
+    
+    if (!subscriptionData.endpoint) {
+      throw new Error('Invalid subscription data: missing endpoint');
+    }
+
     const response = await fetch('/api/subscribe', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        subscription: subscription.toJSON()
+        subscription: subscriptionData
       })
     });
 
     if (!response.ok) {
-      throw new Error('Failed to save subscription to server');
+      const errorText = await response.text();
+      throw new Error(`Failed to save subscription to server: ${errorText}`);
     }
 
-    console.log('✅ Subscription saved to server');
+    console.log('✅ Subscription saved to server successfully');
   } catch (error) {
     console.error('❌ Failed to save subscription:', error);
+    
+    // iOS特有のエラー分析
+    if (isiOSSafariPWA() && (error as Error).message.includes('SyntaxError')) {
+      console.error('🚨 Detected iOS Safari PWA subscription bug in save operation');
+    }
+    
+    throw error; // Re-throw to maintain error handling chain
   }
 }
 
 /**
- * サーバーから購読情報を削除
+ * サーバーから購読情報を削除（iOS Safari PWA対応強化版）
  */
 async function removeSubscriptionFromServer(subscription: PushSubscription): Promise<void> {
+  console.log('🗑️ Removing subscription from server (iOS safe version)...');
+  
   try {
+    const subscriptionData = safeSubscriptionToJSON(subscription);
+    
+    if (!subscriptionData.endpoint) {
+      throw new Error('Invalid subscription data: missing endpoint');
+    }
+
     const response = await fetch('/api/unsubscribe', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        subscription: subscription.toJSON()
+        subscription: subscriptionData
       })
     });
 
     if (!response.ok) {
-      throw new Error('Failed to remove subscription from server');
+      const errorText = await response.text();
+      throw new Error(`Failed to remove subscription from server: ${errorText}`);
     }
 
-    console.log('✅ Subscription removed from server');
+    console.log('✅ Subscription removed from server successfully');
   } catch (error) {
     console.error('❌ Failed to remove subscription:', error);
+    
+    // iOS特有のエラー分析
+    if (isiOSSafariPWA() && (error as Error).message.includes('SyntaxError')) {
+      console.error('🚨 Detected iOS Safari PWA subscription bug in remove operation');
+    }
+    
+    // Note: Don't re-throw for removal operations to avoid breaking unsubscribe flow
   }
 }

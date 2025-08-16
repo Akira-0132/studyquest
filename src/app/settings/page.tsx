@@ -315,13 +315,57 @@ export default function SettingsPage() {
         return;
       }
 
+      // iOS対応: 安全なサブスクリプション変換を使用
+      let subscriptionData;
+      try {
+        // 先ほど作成したsafeSubscriptionToJSON関数と同じロジックを使用
+        addDebugLog('🔄 Converting subscription to JSON (iOS safe version)...');
+        subscriptionData = subscription.toJSON();
+        addDebugLog('✅ Standard toJSON() conversion successful');
+      } catch (jsonError) {
+        addDebugLog(`⚠️ Standard toJSON() failed, using manual conversion: ${jsonError}`);
+        
+        // iOS Safari PWA バグ回避: 手動でオブジェクトを構築
+        try {
+          subscriptionData = {
+            endpoint: subscription.endpoint,
+            keys: {
+              p256dh: subscription.getKey('p256dh') 
+                ? btoa(String.fromCharCode(...new Uint8Array(subscription.getKey('p256dh')!)))
+                : '',
+              auth: subscription.getKey('auth') 
+                ? btoa(String.fromCharCode(...new Uint8Array(subscription.getKey('auth')!)))
+                : ''
+            }
+          };
+          
+          addDebugLog('🔧 Manual subscription object constructed successfully');
+          addDebugLog(`- Endpoint length: ${subscriptionData.endpoint.length}`);
+          addDebugLog(`- p256dh key available: ${!!subscriptionData.keys.p256dh}`);
+          addDebugLog(`- auth key available: ${!!subscriptionData.keys.auth}`);
+        } catch (manualError) {
+          addDebugLog(`❌ Manual subscription conversion also failed: ${manualError}`);
+          
+          // 最後の手段: 基本的な情報のみ
+          subscriptionData = {
+            endpoint: subscription.endpoint || '',
+            keys: {
+              p256dh: '',
+              auth: ''
+            }
+          };
+          
+          addDebugLog('🚨 Using fallback subscription data (keys may be missing)');
+        }
+      }
+
       const response = await fetch('/api/trigger-scheduled-notification', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          subscription: subscription.toJSON(),
+          subscription: subscriptionData,
           timeType: timeType
         })
       });
@@ -337,6 +381,16 @@ export default function SettingsPage() {
       }
     } catch (error) {
       addDebugLog(`❌ スケジュール通知エラー: ${error}`);
+      addDebugLog(`- Error name: ${(error as Error).name}`);
+      addDebugLog(`- Error message: ${(error as Error).message}`);
+      
+      // iOS特有のSyntaxErrorを検出
+      if ((error as Error).message.includes('SyntaxError') || (error as Error).message.includes('string did not match')) {
+        addDebugLog('🚨 Detected iOS Safari PWA subscription.toJSON() bug');
+        alert('❌ iOS Safari固有のエラーが発生しました。\\n\\n対策：\\n1. アプリを完全に閉じる\\n2. Safariを再起動\\n3. ホーム画面からアプリを開く\\n4. 通知設定をやり直す');
+      } else {
+        alert(`❌ スケジュール通知エラー: ${error}`);
+      }
     }
   };
 
