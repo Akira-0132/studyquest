@@ -18,6 +18,8 @@ import {
 import { scheduleNotifications } from '@/lib/pushNotificationManager';
 import { iosNotificationWorkaround } from '@/lib/iosNotificationWorkaround';
 import { IOSPWAGuide } from '@/components/IOSPWAGuide';
+import { startNotificationScheduler, stopNotificationScheduler, getSchedulerStatus, manualSchedulerCheck, getNextScheduledTime, getMinutesUntilNext } from '@/lib/notificationScheduler';
+import { diagnoseNotificationSystem, generateRepairSuggestions, type NotificationSystemHealth } from '@/lib/notificationDebugger';
 
 export default function SettingsPage() {
   const [notificationSettings, setNotificationSettings] = useState({
@@ -45,6 +47,14 @@ export default function SettingsPage() {
   // デバッグログを画面に表示するためのstate
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
+  
+  // 通知スケジューラーの状態
+  const [schedulerStatus, setSchedulerStatus] = useState({ running: false, interval: 60000 });
+  const [nextNotification, setNextNotification] = useState<{ nextTime: string; timeType: string; minutesUntil: number } | null>(null);
+  
+  // 通知システム診断結果
+  const [systemHealth, setSystemHealth] = useState<NotificationSystemHealth | null>(null);
+  const [isRunningDiagnosis, setIsRunningDiagnosis] = useState(false);
   
   // iOS PWA関連state
   const [showPWAGuide, setShowPWAGuide] = useState(false);
@@ -218,8 +228,14 @@ export default function SettingsPage() {
           setNotificationSettings(newSettings);
           localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
           
+          // クライアントサイド通知スケジューラーを開始
+          addDebugLog('🚀 Starting client-side notification scheduler...');
+          startNotificationScheduler();
+          setSchedulerStatus(getSchedulerStatus());
+          updateNextNotificationInfo(newSettings);
+          
           addDebugLog('🎉 バックグラウンド通知システム有効化完了');
-          alert('🎉 バックグラウンド通知が設定されました！\\n\\n✅ アプリが閉じていても指定時刻に通知が届きます\\n✅ テスト通知ボタンで動作確認できます');
+          alert('🎉 バックグラウンド通知が設定されました！\\n\\n✅ アプリが閉じていても指定時刻に通知が届きます\\n✅ テスト通知ボタンで動作確認できます\\n✅ 自動スケジューラーが開始されました');
           return true;
         } else {
           addDebugLog('❌ スケジュール設定に失敗');
@@ -403,6 +419,12 @@ export default function SettingsPage() {
       if (success) {
         addDebugLog('✅ バックグラウンド通知無効化完了');
         
+        // スケジューラーを停止
+        addDebugLog('🛑 Stopping notification scheduler...');
+        stopNotificationScheduler();
+        setSchedulerStatus(getSchedulerStatus());
+        setNextNotification(null);
+        
         const newSettings = { ...notificationSettings, enabled: false };
         setNotificationSettings(newSettings);
         localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
@@ -413,6 +435,72 @@ export default function SettingsPage() {
       }
     } catch (error) {
       addDebugLog(`❌ 通知無効化エラー: ${error}`);
+    }
+  };
+
+  // 次回通知情報を更新
+  const updateNextNotificationInfo = (settings: typeof notificationSettings) => {
+    if (settings.enabled) {
+      const next = getNextScheduledTime({
+        morning: settings.morning,
+        afternoon: settings.afternoon,
+        evening: settings.evening
+      });
+      
+      if (next) {
+        const minutesUntil = getMinutesUntilNext(next.nextTime);
+        setNextNotification({
+          nextTime: next.nextTime,
+          timeType: next.timeType,
+          minutesUntil
+        });
+      }
+    } else {
+      setNextNotification(null);
+    }
+  };
+
+  // 手動スケジューラーチェック
+  const manualSchedulerCheckAction = async () => {
+    addDebugLog('🔧 Manual scheduler check triggered...');
+    
+    try {
+      const result = await manualSchedulerCheck();
+      addDebugLog(`✅ Manual check completed: sent=${result.sent}, failed=${result.failed}`);
+      alert(`手動チェック完了！\\n送信: ${result.sent}件\\n失敗: ${result.failed}件`);
+    } catch (error) {
+      addDebugLog(`❌ Manual check failed: ${error}`);
+      alert(`手動チェック失敗: ${error}`);
+    }
+  };
+
+  // 通知システム包括診断
+  const runSystemDiagnosis = async () => {
+    if (isRunningDiagnosis) return;
+    
+    setIsRunningDiagnosis(true);
+    addDebugLog('🏥 Starting comprehensive notification system diagnosis...');
+    
+    try {
+      const health = await diagnoseNotificationSystem();
+      setSystemHealth(health);
+      
+      addDebugLog(`🏥 Diagnosis complete: ${health.overall} (${health.summary.success}/${health.summary.total} checks passed)`);
+      
+      if (health.overall === 'healthy') {
+        alert('🎉 通知システムは正常に動作しています！\\n\\n全ての検査に合格しました。');
+      } else if (health.overall === 'issues') {
+        const suggestions = generateRepairSuggestions(health);
+        alert(`⚠️ 通知システムに軽微な問題があります。\\n\\n修復提案:\\n${suggestions.slice(0, 3).join('\\n')}`);
+      } else {
+        const suggestions = generateRepairSuggestions(health);
+        alert(`❌ 通知システムに重大な問題があります。\\n\\n修復提案:\\n${suggestions.slice(0, 3).join('\\n')}\\n\\n詳細は診断結果を確認してください。`);
+      }
+    } catch (error) {
+      addDebugLog(`❌ Diagnosis failed: ${error}`);
+      alert(`❌ 診断中にエラーが発生しました: ${error}`);
+    } finally {
+      setIsRunningDiagnosis(false);
     }
   };
 
@@ -428,6 +516,9 @@ export default function SettingsPage() {
     };
     setNotificationSettings(newSettings);
     localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
+    
+    // 次回通知情報を更新
+    updateNextNotificationInfo(newSettings);
     
     // 有効な場合は再スケジュール
     if (newSettings.enabled) {
@@ -447,7 +538,16 @@ export default function SettingsPage() {
     // 通知設定を読み込み
     const saved = localStorage.getItem('studyquest_notifications');
     if (saved) {
-      setNotificationSettings(JSON.parse(saved));
+      const settings = JSON.parse(saved);
+      setNotificationSettings(settings);
+      
+      // 通知が有効な場合はスケジューラーを開始
+      if (settings.enabled) {
+        addDebugLog('🚀 Auto-starting notification scheduler (notifications enabled)...');
+        startNotificationScheduler();
+        setSchedulerStatus(getSchedulerStatus());
+        updateNextNotificationInfo(settings);
+      }
     }
 
     // iOS PWA環境の初期診断
@@ -508,6 +608,18 @@ export default function SettingsPage() {
 
     initializeIOSEnvironment();
   }, []);
+
+  // 次回通知時間を定期的に更新
+  useEffect(() => {
+    if (!notificationSettings.enabled) return;
+    
+    const updateTimer = setInterval(() => {
+      updateNextNotificationInfo(notificationSettings);
+      setSchedulerStatus(getSchedulerStatus());
+    }, 30000); // 30秒ごとに更新
+    
+    return () => clearInterval(updateTimer);
+  }, [notificationSettings.enabled, notificationSettings.morning, notificationSettings.afternoon, notificationSettings.evening]);
 
   return (
     <ClientOnly>
@@ -676,6 +788,31 @@ export default function SettingsPage() {
                         </button>
                       </div>
                     </div>
+                    
+                    {/* スケジューラー状態表示 */}
+                    <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/30 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs text-green-800 dark:text-green-200 font-medium">
+                          🤖 自動スケジューラー
+                        </p>
+                        <span className={`text-xs px-2 py-1 rounded ${schedulerStatus.running ? 'bg-green-600 text-white' : 'bg-gray-400 text-white'}`}>
+                          {schedulerStatus.running ? '実行中' : '停止中'}
+                        </span>
+                      </div>
+                      
+                      {nextNotification && (
+                        <div className="text-xs text-green-700 dark:text-green-300 mb-2">
+                          <p>次回: {nextNotification.nextTime} ({nextNotification.timeType}) - あと{nextNotification.minutesUntil}分</p>
+                        </div>
+                      )}
+                      
+                      <button
+                        onClick={manualSchedulerCheckAction}
+                        className="w-full bg-green-600 hover:bg-green-700 text-white text-xs py-1 px-2 rounded"
+                      >
+                        🔧 手動チェック実行
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -692,7 +829,7 @@ export default function SettingsPage() {
                         type="time"
                         value={notificationSettings.morning}
                         onChange={(e) => updateNotificationTime('morning', e.target.value)}
-                        className="bg-gray-50 border border-gray-300 rounded px-3 py-1 text-sm"
+                        className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
                     
@@ -702,7 +839,7 @@ export default function SettingsPage() {
                         type="time"
                         value={notificationSettings.afternoon}
                         onChange={(e) => updateNotificationTime('afternoon', e.target.value)}
-                        className="bg-gray-50 border border-gray-300 rounded px-3 py-1 text-sm"
+                        className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
                     
@@ -712,7 +849,7 @@ export default function SettingsPage() {
                         type="time"
                         value={notificationSettings.evening}
                         onChange={(e) => updateNotificationTime('evening', e.target.value)}
-                        className="bg-gray-50 border border-gray-300 rounded px-3 py-1 text-sm"
+                        className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
                   </div>
@@ -754,6 +891,107 @@ export default function SettingsPage() {
                   </div>
                   <div className="text-sm text-gray-600 dark:text-gray-300">総タスク</div>
                 </div>
+              </div>
+            </div>
+
+            {/* 通知システム診断 */}
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                🏥 システム診断
+              </h2>
+              
+              <div className="space-y-3">
+                <button
+                  onClick={runSystemDiagnosis}
+                  disabled={isRunningDiagnosis}
+                  className={`w-full font-medium py-3 px-4 rounded-lg transition-colors ${
+                    isRunningDiagnosis 
+                      ? 'bg-gray-400 text-gray-700 cursor-not-allowed' 
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}
+                >
+                  {isRunningDiagnosis ? '🔄 診断実行中...' : '🏥 包括的システム診断を実行'}
+                </button>
+                
+                {systemHealth && (
+                  <div className={`p-4 rounded-lg ${
+                    systemHealth.overall === 'healthy' 
+                      ? 'bg-green-50 dark:bg-green-900/30' 
+                      : systemHealth.overall === 'issues'
+                      ? 'bg-yellow-50 dark:bg-yellow-900/30'
+                      : 'bg-red-50 dark:bg-red-900/30'
+                  }`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className={`font-medium ${
+                        systemHealth.overall === 'healthy' 
+                          ? 'text-green-900 dark:text-green-100' 
+                          : systemHealth.overall === 'issues'
+                          ? 'text-yellow-900 dark:text-yellow-100'
+                          : 'text-red-900 dark:text-red-100'
+                      }`}>
+                        {systemHealth.overall === 'healthy' ? '✅ システム正常' : 
+                         systemHealth.overall === 'issues' ? '⚠️ 軽微な問題' : '❌ 重大な問題'}
+                      </h3>
+                      <span className={`text-sm px-2 py-1 rounded ${
+                        systemHealth.overall === 'healthy' 
+                          ? 'bg-green-600 text-white' 
+                          : systemHealth.overall === 'issues'
+                          ? 'bg-yellow-600 text-white'
+                          : 'bg-red-600 text-white'
+                      }`}>
+                        {systemHealth.summary.success}/{systemHealth.summary.total}
+                      </span>
+                    </div>
+                    
+                    <div className="space-y-2 text-sm">
+                      {systemHealth.results.map((result, index) => (
+                        <div key={index} className="flex items-center justify-between py-1">
+                          <span className={
+                            systemHealth.overall === 'healthy' 
+                              ? 'text-green-800 dark:text-green-200' 
+                              : systemHealth.overall === 'issues'
+                              ? 'text-yellow-800 dark:text-yellow-200'
+                              : 'text-red-800 dark:text-red-200'
+                          }>
+                            {result.step}
+                          </span>
+                          <span className={`text-xs ${
+                            result.status === 'success' ? 'text-green-600' :
+                            result.status === 'warning' ? 'text-yellow-600' : 'text-red-600'
+                          }`}>
+                            {result.status === 'success' ? '✅' : 
+                             result.status === 'warning' ? '⚠️' : '❌'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {systemHealth.overall !== 'healthy' && (
+                      <div className={`mt-3 p-3 rounded-lg ${
+                        systemHealth.overall === 'issues'
+                          ? 'bg-yellow-100 dark:bg-yellow-800/30'
+                          : 'bg-red-100 dark:bg-red-800/30'
+                      }`}>
+                        <h4 className={`font-medium mb-2 ${
+                          systemHealth.overall === 'issues'
+                            ? 'text-yellow-900 dark:text-yellow-100'
+                            : 'text-red-900 dark:text-red-100'
+                        }`}>
+                          修復提案
+                        </h4>
+                        <ul className={`list-disc list-inside space-y-1 text-xs ${
+                          systemHealth.overall === 'issues'
+                            ? 'text-yellow-800 dark:text-yellow-200'
+                            : 'text-red-800 dark:text-red-200'
+                        }`}>
+                          {generateRepairSuggestions(systemHealth).slice(0, 5).map((suggestion, index) => (
+                            <li key={index}>{suggestion}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

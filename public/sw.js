@@ -298,77 +298,85 @@ self.addEventListener('periodicsync', async (event) => {
   }
 });
 
-// スケジュールされた通知をチェックして送信（iOS最適化）
+// スケジュールされた通知をチェックして送信（サーバー連携版）
 async function checkAndSendScheduledNotifications() {
-  console.log('⏰ Checking scheduled notifications...');
+  console.log('⏰ Checking scheduled notifications via server...');
+  
+  try {
+    // サーバーサイドの scheduled notifications API を呼び出し
+    const response = await fetch('/api/send-scheduled-notifications', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (!response.ok) {
+      console.warn('⚠️ Server scheduled notifications check failed:', response.status);
+      return;
+    }
+    
+    const result = await response.json();
+    
+    if (result.summary.sent > 0) {
+      console.log(`📬 ${result.summary.sent} scheduled notifications sent by server`);
+    }
+    
+    if (result.summary.failed > 0) {
+      console.warn(`⚠️ ${result.summary.failed} scheduled notifications failed`);
+    }
+    
+  } catch (error) {
+    console.error('❌ Server scheduled notification check failed:', error);
+    
+    // フォールバック：ローカル通知を表示
+    await showFallbackScheduledNotification();
+  }
+}
+
+// フォールバック用のローカル通知表示
+async function showFallbackScheduledNotification() {
+  console.log('🔄 Using fallback local notification...');
   
   try {
     const now = new Date();
     const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
     
-    // iOS 18.1.1+ IndexedDBバグ対策
-    let settings = null;
-    try {
-      if (typeof indexedDB !== 'undefined') {
-        // IndexedDBから設定を取得する処理（省略）
-        console.log('📦 IndexedDB available');
-      } else {
-        console.warn('⚠️ IndexedDB unavailable (iOS bug), using fallback');
-      }
-    } catch (error) {
-      console.warn('⚠️ IndexedDB access failed:', error);
+    let message = '📚 勉強の時間です！';
+    let title = 'StudyQuest リマインダー';
+    
+    if (currentHour < 12) {
+      title = 'StudyQuest 🌅 おはよう！';
+      message = '新しい一日の始まりです！今日も頑張りましょう！';
+    } else if (currentHour < 18) {
+      title = 'StudyQuest 📚 午後の学習';
+      message = '学校お疲れさま！集中して勉強しましょう！';
+    } else {
+      title = 'StudyQuest 🌙 夜の学習';
+      message = 'ラストスパート！今日の目標を達成しよう！';
     }
     
-    // フォールバック：デフォルトスケジュール
-    const schedules = [
-      { 
-        hour: 7, 
-        minute: 0, 
-        message: 'おはよう！今日も頑張ろう！🌅',
-        type: 'morning'
+    await self.registration.showNotification(title, {
+      body: message,
+      icon: '/icon-192x192.png',
+      badge: '/icon-96x96.png',
+      tag: 'fallback-scheduled-notification',
+      requireInteraction: true,
+      vibrate: [200, 100, 200],
+      data: {
+        timestamp: Date.now(),
+        source: 'fallback-scheduled',
+        url: '/'
       },
-      { 
-        hour: 16, 
-        minute: 0, 
-        message: '学校お疲れさま！勉強始めよう📚',
-        type: 'afternoon'
-      },
-      { 
-        hour: 20, 
-        minute: 0, 
-        message: 'ラストスパート！もう少し！💪',
-        type: 'evening'
-      }
-    ];
+      actions: [
+        { action: 'open', title: '勉強を始める' },
+        { action: 'dismiss', title: '後で' }
+      ]
+    });
     
-    for (const schedule of schedules) {
-      // 時刻マッチング（±5分の範囲）
-      if (schedule.hour === currentHour && Math.abs(schedule.minute - currentMinute) < 5) {
-        console.log(`🔔 Sending scheduled notification: ${schedule.type}`);
-        
-        await self.registration.showNotification('StudyQuest - 定期リマインダー', {
-          body: schedule.message,
-          icon: '/icon-192x192.png',
-          badge: '/icon-96x96.png',
-          tag: `scheduled-${schedule.type}-${schedule.hour}-${schedule.minute}`,
-          requireInteraction: true, // iOS向け永続化
-          vibrate: [200, 100, 200],
-          data: {
-            timestamp: Date.now(),
-            source: 'scheduled',
-            type: schedule.type,
-            url: '/'
-          },
-          actions: [
-            { action: 'open', title: '勉強を始める' },
-            { action: 'dismiss', title: '後で' }
-          ]
-        });
-      }
-    }
+    console.log('✅ Fallback scheduled notification shown');
   } catch (error) {
-    console.error('❌ Scheduled notification check failed:', error);
+    console.error('❌ Fallback notification failed:', error);
   }
 }
 
