@@ -438,7 +438,11 @@ export default function SettingsPage() {
             addDebugLog('✅ iOS fallback scheduler found');
           } else {
             addDebugLog('📅 Setting up iOS fallback scheduler...');
-            await iosNotificationWorkaround.scheduleNotificationsFallback(notificationSettings);
+            await iosNotificationWorkaround.scheduleNotificationsFallback({
+              morning: notificationSettings.morning,
+              afternoon: notificationSettings.afternoon,
+              evening: notificationSettings.evening
+            });
           }
         }
         
