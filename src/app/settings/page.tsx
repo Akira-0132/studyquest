@@ -97,7 +97,9 @@ export default function SettingsPage() {
 
   // 🚀 バックグラウンド通知システム（iOS対応強化版）
   const setupBackgroundNotifications = async () => {
-    addDebugLog('🚀 バックグラウンド通知セットアップ開始（iOS対応版）...');
+    addDebugLog('🚀 === バックグラウンド通知セットアップ開始 ===');
+    addDebugLog(`📋 現在時刻: ${new Date().toLocaleString('ja-JP')}`);
+    addDebugLog(`📋 関数呼び出し確認: setupBackgroundNotifications実行中`);
     
     try {
       // Service Worker登録確認と自動復旧
@@ -247,6 +249,7 @@ export default function SettingsPage() {
           updateNextNotificationInfo(newSettings);
           
           addDebugLog('🎉 バックグラウンド通知システム有効化完了');
+          addDebugLog('📋 setupBackgroundNotifications: 成功でreturn true');
           alert('🎉 バックグラウンド通知が設定されました！\n\n✅ アプリが閉じていても指定時刻に通知が届きます\n✅ テスト通知ボタンで動作確認できます\n✅ 自動スケジューラーが開始されました');
           return true;
         } else {
@@ -484,7 +487,38 @@ export default function SettingsPage() {
                 
                 {!notificationSettings.enabled ? (
                   <button
-                    onClick={setupBackgroundNotifications}
+                    onClick={async (e) => {
+                      // 即座にフィードバック
+                      addDebugLog('🔥 バックグラウンド通知ボタンがクリックされました！');
+                      const button = e.target as HTMLButtonElement;
+                      const originalText = button.textContent;
+                      
+                      try {
+                        // ボタンを無効化してユーザーに処理中を表示
+                        button.disabled = true;
+                        button.textContent = '⏳ 設定中...';
+                        button.className = "w-full bg-gray-500 text-white font-medium py-3 px-4 rounded-lg transition-colors cursor-not-allowed";
+                        
+                        addDebugLog('🚀 setupBackgroundNotifications関数を呼び出し中...');
+                        const result = await setupBackgroundNotifications();
+                        addDebugLog(`📋 setupBackgroundNotifications結果: ${result}`);
+                        
+                        if (!result) {
+                          addDebugLog('❌ セットアップが失敗しました');
+                          alert('❌ バックグラウンド通知の設定に失敗しました。\n\nデバッグログを確認してください。');
+                        }
+                        
+                      } catch (error) {
+                        addDebugLog(`❌ ボタンクリック処理でエラー: ${error}`);
+                        alert(`❌ エラーが発生しました: ${error}`);
+                      } finally {
+                        // ボタンを元に戻す
+                        button.disabled = false;
+                        button.textContent = originalText;
+                        button.className = "w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors";
+                        addDebugLog('🔄 ボタン処理完了');
+                      }
+                    }}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
                   >
                     🚀 バックグラウンド通知を有効にする
@@ -706,6 +740,16 @@ export default function SettingsPage() {
             {/* モバイル専用診断パネル */}
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    addDebugLog('🧪 ボタンテスト: クリック検知OK');
+                    alert('🧪 ボタンクリックテスト成功！\n\nボタンは正常に反応しています。');
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white text-xs py-2 px-3 rounded transition-colors"
+                >
+                  🧪 ボタンテスト
+                </button>
+                
                 <button
                   onClick={async () => {
                     addDebugLog('🔍 === モバイル詳細診断開始 ===');
