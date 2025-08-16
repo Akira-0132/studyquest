@@ -382,11 +382,176 @@ export default function SettingsPage() {
                     🚀 バックグラウンド通知を有効にする
                   </button>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <span className="text-green-700 dark:text-green-300 font-medium">
-                        ✅ 有効
+                        ✅ バックグラウンド通知有効
                       </span>
+                      <button
+                        onClick={async () => {
+                          try {
+                            await unsubscribeFromPush();
+                            const newSettings = { ...notificationSettings, enabled: false };
+                            setNotificationSettings(newSettings);
+                            localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
+                            stopNotificationScheduler();
+                            setSchedulerStatus(getSchedulerStatus());
+                            setNextNotification(null);
+                            addDebugLog('🔕 バックグラウンド通知を無効化しました');
+                            alert('🔕 バックグラウンド通知を無効化しました');
+                          } catch (error) {
+                            addDebugLog(`❌ 通知無効化エラー: ${error}`);
+                            alert('⚠️ 通知無効化でエラーが発生しました');
+                          }
+                        }}
+                        className="text-red-600 hover:text-red-700 text-sm font-medium"
+                      >
+                        無効化
+                      </button>
+                    </div>
+
+                    {/* 通知時刻設定 */}
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-medium text-gray-900 dark:text-white">通知時刻設定</h3>
+                      
+                      <div className="grid grid-cols-1 gap-3">
+                        {/* 朝の通知 */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600 dark:text-gray-300">🌅 朝の通知</span>
+                          <input
+                            type="time"
+                            value={notificationSettings.morning}
+                            onChange={(e) => {
+                              const newSettings = { 
+                                ...notificationSettings, 
+                                morning: e.target.value,
+                                schedule: { ...notificationSettings.schedule, morning: e.target.value }
+                              };
+                              setNotificationSettings(newSettings);
+                              localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
+                              updateNextNotificationInfo(newSettings);
+                              addDebugLog(`⏰ 朝の通知時刻を${e.target.value}に変更`);
+                            }}
+                            className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          />
+                        </div>
+
+                        {/* 昼の通知 */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600 dark:text-gray-300">☀️ 昼の通知</span>
+                          <input
+                            type="time"
+                            value={notificationSettings.afternoon}
+                            onChange={(e) => {
+                              const newSettings = { 
+                                ...notificationSettings, 
+                                afternoon: e.target.value,
+                                schedule: { ...notificationSettings.schedule, afternoon: e.target.value }
+                              };
+                              setNotificationSettings(newSettings);
+                              localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
+                              updateNextNotificationInfo(newSettings);
+                              addDebugLog(`⏰ 昼の通知時刻を${e.target.value}に変更`);
+                            }}
+                            className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          />
+                        </div>
+
+                        {/* 夜の通知 */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600 dark:text-gray-300">🌙 夜の通知</span>
+                          <input
+                            type="time"
+                            value={notificationSettings.evening}
+                            onChange={(e) => {
+                              const newSettings = { 
+                                ...notificationSettings, 
+                                evening: e.target.value,
+                                schedule: { ...notificationSettings.schedule, evening: e.target.value }
+                              };
+                              setNotificationSettings(newSettings);
+                              localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
+                              updateNextNotificationInfo(newSettings);
+                              addDebugLog(`⏰ 夜の通知時刻を${e.target.value}に変更`);
+                            }}
+                            className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 次回通知予定 */}
+                    {nextNotification && (
+                      <div className="bg-green-50 dark:bg-green-900/30 rounded-lg p-3">
+                        <div className="text-sm text-green-800 dark:text-green-200">
+                          <span className="font-medium">次回通知:</span> {nextNotification.timeType} ({nextNotification.nextTime})
+                          <div className="text-xs mt-1">
+                            あと約 {nextNotification.minutesUntil} 分
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* テスト通知ボタン */}
+                    <div className="space-y-2">
+                      <button
+                        onClick={async () => {
+                          try {
+                            addDebugLog('🧪 テスト通知を送信中...');
+                            await sendTestNotification(
+                              '📚 StudyQuest テスト通知', 
+                              '通知機能が正常に動作しています！', 
+                              { 
+                                icon: '/icon-192x192.png',
+                                badge: '/icon-96x96.png',
+                                tag: 'test-notification',
+                                requireInteraction: true 
+                              }
+                            );
+                            addDebugLog('✅ テスト通知送信完了');
+                            alert('📱 テスト通知を送信しました！\n\n通知が表示されない場合：\n• ブラウザの通知設定を確認\n• デバイスの通知設定を確認\n• iOS の場合はPWAモードで開く');
+                          } catch (error) {
+                            addDebugLog(`❌ テスト通知エラー: ${error}`);
+                            alert('❌ テスト通知の送信に失敗しました。\n\nデバッグログを確認してください。');
+                          }
+                        }}
+                        className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm"
+                      >
+                        🧪 テスト通知を送信
+                      </button>
+
+                      <button
+                        onClick={async () => {
+                          try {
+                            addDebugLog('🔄 手動スケジューラーチェック実行中...');
+                            await manualSchedulerCheck();
+                            addDebugLog('✅ 手動スケジューラーチェック完了');
+                            alert('🔄 手動スケジューラーチェックを実行しました');
+                          } catch (error) {
+                            addDebugLog(`❌ 手動チェックエラー: ${error}`);
+                            alert('❌ 手動チェックでエラーが発生しました');
+                          }
+                        }}
+                        className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm"
+                      >
+                        🔄 手動スケジューラーチェック
+                      </button>
+                    </div>
+
+                    {/* スケジューラー状態 */}
+                    <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                      <div className="text-sm text-gray-700 dark:text-gray-300">
+                        <div className="flex justify-between">
+                          <span>スケジューラー:</span>
+                          <span className={schedulerStatus.running ? 'text-green-600' : 'text-red-600'}>
+                            {schedulerStatus.running ? '実行中' : '停止中'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>チェック間隔:</span>
+                          <span>{schedulerStatus.interval / 1000}秒</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
