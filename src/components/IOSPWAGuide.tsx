@@ -12,7 +12,15 @@ interface IOSPWAGuideProps {
 export function IOSPWAGuide({ onClose, trigger = 'automatic' }: IOSPWAGuideProps) {
   const [showGuide, setShowGuide] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
-  const [deviceInfo, setDeviceInfo] = useState({
+  const [deviceInfo, setDeviceInfo] = useState<{
+    isIOS: boolean;
+    isPWA: boolean;
+    notificationSupported: {
+      supported: boolean;
+      reason?: string;
+      recommendations?: string[];
+    };
+  }>({
     isIOS: false,
     isPWA: false,
     notificationSupported: { supported: false, reason: '', recommendations: [] as string[] }

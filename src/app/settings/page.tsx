@@ -48,7 +48,15 @@ export default function SettingsPage() {
     issues: string[];
     recommendations: string[];
   } | null>(null);
-  const [deviceInfo, setDeviceInfo] = useState({
+  const [deviceInfo, setDeviceInfo] = useState<{
+    isIOS: boolean;
+    isPWA: boolean;
+    notificationSupported: {
+      supported: boolean;
+      reason?: string;
+      recommendations?: string[];
+    };
+  }>({
     isIOS: false,
     isPWA: false,
     notificationSupported: { supported: false, reason: '', recommendations: [] as string[] }

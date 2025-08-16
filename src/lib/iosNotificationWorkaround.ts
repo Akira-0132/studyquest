@@ -157,7 +157,6 @@ export class IOSNotificationWorkaround {
         icon: '/icon-192x192.png',
         badge: '/icon-96x96.png',
         requireInteraction: true, // iOS向け
-        vibrate: [200, 100, 200],
         ...options
       });
 
