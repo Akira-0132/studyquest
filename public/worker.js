@@ -1,12 +1,160 @@
-// StudyQuest Custom Service Worker for next-pwa integration
-// Handles push notifications with iOS PWA optimization
+// StudyQuest Enhanced Custom Service Worker for next-pwa integration
+// Handles StudyQuest-specific push notifications with comprehensive routing and iOS PWA optimization
 
-console.log('📱 StudyQuest Custom Worker initializing...');
+console.log('📱 StudyQuest Enhanced Custom Worker initializing...');
 
-// プッシュ通知受信（iOS Safari PWA最適化版）
+// StudyQuest notification routing configuration
+const STUDYQUEST_NOTIFICATION_ROUTES = {
+  'study_reminder': '/',
+  'exam_alert': '/schedule',
+  'streak_notification': '/',
+  'achievement_unlock': '/settings',
+  'schedule_update': '/schedule',
+  'task_completion': '/',
+  'level_up': '/settings',
+  'badge_earned': '/settings',
+  'streak_warning': '/',
+  'exam_countdown': '/schedule',
+  'daily_summary': '/'
+};
+
+// StudyQuest notification templates
+const STUDYQUEST_NOTIFICATION_TEMPLATES = {
+  'study_reminder': {
+    icon: '📚',
+    requireInteraction: true,
+    vibrate: [200, 100, 200],
+    actions: [
+      { action: 'start_studying', title: '勉強を始める', icon: '/icon-96x96.png' },
+      { action: 'snooze', title: '10分後に通知', icon: '/icon-96x96.png' },
+      { action: 'dismiss', title: '後で' }
+    ]
+  },
+  'exam_alert': {
+    icon: '⚠️',
+    requireInteraction: true,
+    vibrate: [300, 100, 300, 100, 300],
+    actions: [
+      { action: 'view_schedule', title: 'スケジュール確認', icon: '/icon-96x96.png' },
+      { action: 'start_studying', title: '今すぐ勉強', icon: '/icon-96x96.png' },
+      { action: 'dismiss', title: '確認済み' }
+    ]
+  },
+  'streak_notification': {
+    icon: '🔥',
+    requireInteraction: true,
+    vibrate: [100, 50, 100, 50, 100],
+    actions: [
+      { action: 'view_stats', title: '統計を見る', icon: '/icon-96x96.png' },
+      { action: 'continue_streak', title: 'ストリーク継続', icon: '/icon-96x96.png' },
+      { action: 'dismiss', title: '閉じる' }
+    ]
+  },
+  'achievement_unlock': {
+    icon: '🎉',
+    requireInteraction: true,
+    vibrate: [200, 100, 200, 100, 200, 100, 300],
+    actions: [
+      { action: 'view_achievement', title: '実績を見る', icon: '/icon-96x96.png' },
+      { action: 'share', title: 'シェア', icon: '/icon-96x96.png' },
+      { action: 'dismiss', title: '閉じる' }
+    ]
+  },
+  'schedule_update': {
+    icon: '📅',
+    requireInteraction: false,
+    vibrate: [100, 100, 100],
+    actions: [
+      { action: 'view_schedule', title: 'スケジュール確認', icon: '/icon-96x96.png' },
+      { action: 'dismiss', title: 'OK' }
+    ]
+  }
+};
+
+// StudyQuest notification content generators
+function getStudyQuestTitle(type, data) {
+  const titles = {
+    'study_reminder': `StudyQuest ${data?.timeSlot === 'morning' ? '🌅' : data?.timeSlot === 'afternoon' ? '📚' : '🌙'} 学習リマインダー`,
+    'exam_alert': `⚠️ 試験まで${data?.daysUntilExam || 'あと少し'}！`,
+    'streak_notification': `🔥 ${data?.streakCount || '連続'}日ストリーク${data?.subType === 'achievement' ? '達成！' : data?.subType === 'warning' ? '危機！' : '更新！'}`,
+    'achievement_unlock': `🎉 ${data?.achievementType === 'level_up' ? 'レベルアップ！' : data?.achievementType === 'badge_earned' ? 'バッジ獲得！' : '新実績解除！'}`,
+    'schedule_update': '📅 学習スケジュール更新',
+    'task_completion': '✅ タスク完了おめでとう！',
+    'level_up': `⭐ レベル${data?.newLevel || ''}到達！`,
+    'badge_earned': `🎖️ 新バッジ「${data?.badgeName || 'バッジ'}」獲得！`,
+    'streak_warning': `⚠️ ストリーク継続まで${data?.hoursRemaining || 'あと少し'}時間`,
+    'exam_countdown': `📝 ${data?.examName || '試験'}まで${data?.daysRemaining || ''}日`,
+    'daily_summary': '📊 今日の学習結果'
+  };
+  return titles[type] || 'StudyQuest 通知';
+}
+
+function getStudyQuestMessage(type, data) {
+  const messages = {
+    'study_reminder': getStudyReminderMessage(data),
+    'exam_alert': `${data?.examName || '試験'}の準備は大丈夫ですか？今日も頑張りましょう！`,
+    'streak_notification': getStreakMessage(data),
+    'achievement_unlock': `${data?.title || '新しい実績'}を達成しました！継続が力になっています。`,
+    'schedule_update': `${data?.newTasksCount || '複数'}個の新しいタスクが追加されました。`,
+    'task_completion': `${data?.taskTitle || 'タスク'}完了！+${data?.expGained || '10'}EXP獲得しました。`,
+    'level_up': `レベル${data?.newLevel || ''}になりました！新機能が解放されました。`,
+    'badge_earned': `「${data?.badgeName || 'バッジ'}」を獲得しました！`,
+    'streak_warning': `あと${Math.floor(data?.hoursRemaining || 24)}時間でストリークが途切れます。`,
+    'exam_countdown': `準備進捗: ${data?.preparationStatus || 0}% - 頑張りましょう！`,
+    'daily_summary': `今日は${data?.tasksCompleted || 0}/${data?.totalTasks || 0}タスク完了、${data?.expGained || 0}EXP獲得！`
+  };
+  return messages[type] || '新しい通知があります。';
+}
+
+function getStudyReminderMessage(data) {
+  const timeSlot = data?.timeSlot;
+  const streakCount = data?.streakCount || 0;
+  const tasksCount = data?.tasksCount || 0;
+  
+  const messages = {
+    'morning': [
+      `おはよう！今日も頑張ろう！${tasksCount}個のタスクが待っています。`,
+      `新しい一日の始まり！現在${streakCount}日連続学習中です。`,
+      `朝の学習は効果的！今日の目標を達成しましょう。`
+    ],
+    'afternoon': [
+      `学校お疲れさま！午後の学習時間です。`,
+      `集中タイム！残り${tasksCount}個のタスクを片付けましょう。`,
+      `午後の復習は記憶定着に効果的です。`
+    ],
+    'evening': [
+      `夜の学習時間です。今日の仕上げをしましょう！`,
+      `一日の締めくくり。${streakCount}日連続記録を維持しよう！`,
+      `夜の復習で今日の学習を完璧に！`
+    ]
+  };
+  
+  const timeMessages = messages[timeSlot] || messages['afternoon'];
+  return timeMessages[Math.floor(Math.random() * timeMessages.length)];
+}
+
+function getStreakMessage(data) {
+  const subType = data?.subType;
+  const streakCount = data?.streakCount || 0;
+  
+  switch (subType) {
+    case 'achievement':
+      return `${streakCount}日連続学習達成！素晴らしい継続力です。`;
+    case 'warning':
+      return `あと${Math.floor(data?.hoursUntilReset || 24)}時間でストリークが途切れます。今すぐ学習しましょう！`;
+    case 'record':
+      return `新記録！${streakCount}日連続は個人ベストです！`;
+    case 'milestone':
+      return `${data?.milestoneLevel || 'ブロンズ'}レベル到達！${streakCount}日連続学習の証です。`;
+    default:
+      return `現在${streakCount}日連続学習中！継続は力なり。`;
+  }
+}
+
+// プッシュ通知受信（StudyQuest特化型）
 self.addEventListener('push', (event) => {
   const pushEventId = Math.random().toString(36).substr(2, 9);
-  console.log('📱 Push event received (iOS PWA):', {
+  console.log('📱 StudyQuest Push event received:', {
     pushEventId,
     hasData: !!event.data,
     timestamp: new Date().toISOString(),
@@ -55,12 +203,14 @@ self.addEventListener('push', (event) => {
   const handlePush = async () => {
     // Track the push event first
     await trackPushEvent();
+    
+    // StudyQuest default notification structure
     let notificationData = {
       title: 'StudyQuest',
-      body: '📚 勉強の時間です！',
+      body: '📚 新しい通知があります',
       icon: '/icon-192x192.png',
       badge: '/icon-96x96.png',
-      tag: 'studyquest-push',
+      tag: 'studyquest-default',
       requireInteraction: true, // iOS向けに永続化
       silent: false, // CRITICAL: NEVER set to true on iOS
       vibrate: [200, 100, 200], // iOS対応
@@ -69,7 +219,8 @@ self.addEventListener('push', (event) => {
         timestamp: Date.now(),
         url: '/',
         source: 'background-push',
-        pushEventId: Math.random().toString(36).substr(2, 9)
+        pushEventId: pushEventId,
+        type: 'study_reminder' // デフォルトタイプ
       },
       actions: [
         {
@@ -84,24 +235,56 @@ self.addEventListener('push', (event) => {
       ]
     };
 
-    // プッシュデータがある場合は解析（iOS対応）
+    // StudyQuest プッシュデータ処理
     if (event.data) {
       try {
         const receivedData = event.data.json();
-        console.log('📦 Push data received:', receivedData);
+        console.log('📦 StudyQuest push data received:', receivedData);
+        
+        // StudyQuest通知タイプを特定
+        const notificationType = receivedData.data?.type || receivedData.type || 'study_reminder';
+        console.log('🎯 StudyQuest notification type:', notificationType);
+        
+        // タイプ別テンプレート適用
+        const template = STUDYQUEST_NOTIFICATION_TEMPLATES[notificationType] || STUDYQUEST_NOTIFICATION_TEMPLATES['study_reminder'];
+        const route = STUDYQUEST_NOTIFICATION_ROUTES[notificationType] || '/';
+        
+        // StudyQuest特化型通知データ構築
         notificationData = {
-          ...notificationData,
-          ...receivedData,
-          // iOS: 確実にsilent=falseを維持
-          silent: false,
+          title: receivedData.title || getStudyQuestTitle(notificationType, receivedData),
+          body: receivedData.body || getStudyQuestMessage(notificationType, receivedData),
+          icon: receivedData.icon || '/icon-192x192.png',
+          badge: receivedData.badge || '/icon-96x96.png',
+          tag: `studyquest-${notificationType}-${Date.now()}`,
+          requireInteraction: template.requireInteraction,
+          silent: false, // iOS: 確実にsilent=falseを維持
+          vibrate: template.vibrate,
+          renotify: true,
           data: {
-            ...notificationData.data,
-            ...receivedData.data
-          }
+            ...receivedData.data,
+            type: notificationType,
+            url: route,
+            timestamp: Date.now(),
+            source: 'background-push',
+            pushEventId: pushEventId
+          },
+          actions: template.actions || notificationData.actions
         };
+        
+        // StudyQuest特化型ログ
+        console.log('🎮 StudyQuest notification configured:', {
+          type: notificationType,
+          route: route,
+          title: notificationData.title,
+          requireInteraction: notificationData.requireInteraction
+        });
+        
       } catch (e) {
-        console.warn('⚠️ Push data parsing failed, using text:', e);
-        notificationData.body = event.data.text() || notificationData.body;
+        console.warn('⚠️ StudyQuest push data parsing failed:', e);
+        // フォールバック: テキストデータを使用
+        if (event.data.text) {
+          notificationData.body = event.data.text();
+        }
       }
     }
 
@@ -193,62 +376,184 @@ self.addEventListener('push', (event) => {
   event.waitUntil(handlePush());
 });
 
-// 通知クリック（iOS PWA最適化版）
+// StudyQuest 通知クリック（タイプ別ルーティング対応）
 self.addEventListener('notificationclick', (event) => {
-  console.log('📱 Notification clicked (iOS PWA):', {
-    action: event.action,
+  const notificationData = event.notification.data || {};
+  const notificationType = notificationData.type || 'study_reminder';
+  const action = event.action;
+  
+  console.log('📱 StudyQuest notification clicked:', {
+    type: notificationType,
+    action: action,
     tag: event.notification.tag,
-    data: event.notification.data
+    data: notificationData
   });
   
   event.notification.close();
 
-  // アクション別処理
-  if (event.action === 'dismiss') {
-    console.log('✖️ Notification dismissed');
+  // StudyQuest アクション別処理
+  if (action === 'dismiss') {
+    console.log('✖️ StudyQuest notification dismissed');
     return;
   }
 
-  // アプリを開く or フォーカス（iOS対応強化）
-  const openApp = async () => {
+  // StudyQuest特化型アプリ起動・ナビゲーション
+  const openStudyQuestApp = async () => {
     try {
+      // StudyQuest特化型ルーティング決定
+      let targetUrl = determineStudyQuestRoute(notificationType, action, notificationData);
+      
+      console.log('🎯 StudyQuest routing to:', targetUrl);
+      
       const clientList = await clients.matchAll({ 
         type: 'window', 
         includeUncontrolled: true 
       });
       
-      console.log('🔍 Found clients:', clientList.length);
+      console.log('🔍 Found StudyQuest clients:', clientList.length);
       
-      // 既に開いているPWAウィンドウがあればフォーカス
+      // 既に開いているStudyQuestウィンドウがあればフォーカス
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          console.log('🎯 Focusing existing client');
+          console.log('🎯 Focusing existing StudyQuest client');
           await client.focus();
           
-          // 通知データに基づいてナビゲーション
-          if (event.notification.data && event.notification.data.url) {
-            client.postMessage({
-              type: 'NAVIGATE_TO',
-              url: event.notification.data.url
-            });
-          }
+          // StudyQuest特化型ナビゲーション
+          client.postMessage({
+            type: 'STUDYQUEST_NAVIGATE',
+            url: targetUrl,
+            notificationType: notificationType,
+            action: action,
+            data: notificationData
+          });
+          
+          // StudyQuest特化型アクション実行
+          handleStudyQuestAction(client, notificationType, action, notificationData);
+          
           return;
         }
       }
       
-      // 新しくPWAを開く
+      // 新しくStudyQuestを開く
       if (clients.openWindow) {
-        const targetUrl = event.notification.data?.url || '/';
-        console.log('🆕 Opening new window:', targetUrl);
+        console.log('🆕 Opening new StudyQuest window:', targetUrl);
         await clients.openWindow(targetUrl);
       }
+      
     } catch (error) {
-      console.error('❌ Failed to handle notification click:', error);
+      console.error('❌ Failed to handle StudyQuest notification click:', error);
+      // フォールバック: デフォルトページを開く
+      try {
+        if (clients.openWindow) {
+          await clients.openWindow('/');
+        }
+      } catch (fallbackError) {
+        console.error('❌ Fallback navigation failed:', fallbackError);
+      }
     }
   };
 
-  event.waitUntil(openApp());
+  event.waitUntil(openStudyQuestApp());
 });
+
+// StudyQuest通知タイプ・アクション別ルーティング
+function determineStudyQuestRoute(type, action, data) {
+  // アクション優先ルーティング
+  const actionRoutes = {
+    'start_studying': '/?action=start_study',
+    'view_schedule': '/schedule',
+    'view_stats': '/settings?tab=stats',
+    'view_achievement': '/settings?tab=achievements',
+    'continue_streak': '/?action=continue_streak',
+    'snooze': '/?action=snoozed',
+    'share': '/settings?action=share'
+  };
+  
+  if (action && actionRoutes[action]) {
+    return actionRoutes[action];
+  }
+  
+  // タイプ別デフォルトルーティング
+  const typeRoutes = STUDYQUEST_NOTIFICATION_ROUTES;
+  let baseUrl = typeRoutes[type] || '/';
+  
+  // データ基づく追加パラメータ
+  const queryParams = new URLSearchParams();
+  
+  // 通知からの参照であることを示す
+  queryParams.set('from', 'notification');
+  queryParams.set('type', type);
+  
+  if (data.examId) {
+    queryParams.set('examId', data.examId);
+  }
+  
+  if (data.taskId) {
+    queryParams.set('taskId', data.taskId);
+  }
+  
+  if (data.achievementType) {
+    queryParams.set('achievement', data.achievementType);
+  }
+  
+  if (data.urgencyLevel) {
+    queryParams.set('priority', data.urgencyLevel);
+  }
+  
+  return `${baseUrl}?${queryParams.toString()}`;
+}
+
+// StudyQuest特化型アクション実行
+function handleStudyQuestAction(client, type, action, data) {
+  try {
+    const actionHandlers = {
+      'start_studying': () => {
+        client.postMessage({
+          type: 'STUDYQUEST_ACTION',
+          action: 'START_STUDY_SESSION',
+          data: { type, notificationData: data }
+        });
+      },
+      'snooze': () => {
+        client.postMessage({
+          type: 'STUDYQUEST_ACTION',
+          action: 'SNOOZE_NOTIFICATION',
+          data: { duration: 10, type } // 10分後
+        });
+      },
+      'continue_streak': () => {
+        client.postMessage({
+          type: 'STUDYQUEST_ACTION',
+          action: 'HIGHLIGHT_STREAK',
+          data: { streakCount: data.streakCount }
+        });
+      },
+      'view_stats': () => {
+        client.postMessage({
+          type: 'STUDYQUEST_ACTION',
+          action: 'OPEN_STATS_MODAL',
+          data: { focusType: type }
+        });
+      },
+      'view_achievement': () => {
+        client.postMessage({
+          type: 'STUDYQUEST_ACTION',
+          action: 'SHOW_ACHIEVEMENT',
+          data: { achievementId: data.badgeId || data.title }
+        });
+      }
+    };
+    
+    const handler = actionHandlers[action];
+    if (handler) {
+      handler();
+      console.log(`🎮 StudyQuest action executed: ${action}`);
+    }
+    
+  } catch (error) {
+    console.error('❌ StudyQuest action handling failed:', error);
+  }
+}
 
 // メッセージリスナー（iOS対応強化）
 self.addEventListener('message', async (event) => {

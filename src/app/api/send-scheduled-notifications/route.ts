@@ -1,5 +1,10 @@
 import webpush from 'web-push';
 import { NextRequest, NextResponse } from 'next/server';
+import type { 
+  StudyQuestNotificationPayload, 
+  StudyReminderData,
+  StudyQuestNotificationType 
+} from '../../../../types/studyquest-notifications';
 
 // VAPID設定
 webpush.setVapidDetails(
@@ -10,6 +15,79 @@ webpush.setVapidDetails(
 
 // 共有ストレージインポート
 import { notificationSchedules } from '@/lib/serverStorage';
+
+// StudyQuest スケジュール通知生成
+function createStudyQuestScheduledPayload(
+  timeType: 'morning' | 'afternoon' | 'evening',
+  scheduledTime: string
+): StudyQuestNotificationPayload {
+  
+  const timeData = {
+    'morning': {
+      title: 'StudyQuest 🌅 朝の学習',
+      messages: [
+        'おはよう！今日も頑張ろう！新しい一日の始まりです。',
+        '朝の学習は効果的！脳がフレッシュな今がチャンス。',
+        '早起きは三文の徳！今日の目標を達成しましょう。'
+      ],
+      vibrate: [200, 100, 200, 100, 200]
+    },
+    'afternoon': {
+      title: 'StudyQuest 📚 午後の学習',
+      messages: [
+        '学校お疲れさま！午後の学習時間です。',
+        '集中タイム！今日学んだことを復習しましょう。',
+        '午後の復習は記憶定着に効果的です。'
+      ],
+      vibrate: [150, 100, 150, 100, 150]
+    },
+    'evening': {
+      title: 'StudyQuest 🌙 夜の学習',
+      messages: [
+        '夜の学習時間です。今日の仕上げをしましょう！',
+        '一日の締めくくり。継続記録を維持しよう！',
+        '夜の復習で今日の学習を完璧に！'
+      ],
+      vibrate: [100, 50, 100, 50, 100, 50, 200]
+    }
+  };
+
+  const data = timeData[timeType];
+  const randomMessage = data.messages[Math.floor(Math.random() * data.messages.length)];
+
+  const studyReminderData: StudyReminderData = {
+    type: 'study_reminder',
+    timeSlot: timeType,
+    scheduledTime,
+    tasksCount: Math.floor(Math.random() * 5) + 1, // 1-5 tasks
+    streakCount: Math.floor(Math.random() * 30) + 1, // 1-30 days
+    url: '/',
+    timestamp: Date.now(),
+    source: 'scheduled',
+    motivationalMessage: randomMessage
+  };
+
+  return {
+    title: data.title,
+    body: randomMessage,
+    icon: '/icon-192x192.png',
+    badge: '/icon-96x96.png',
+    tag: `studyquest-scheduled-${timeType}-${Date.now()}`,
+    requireInteraction: true,
+    silent: false,
+    vibrate: data.vibrate,
+    renotify: true,
+    timestamp: Date.now(),
+    data: studyReminderData,
+    actions: [
+      { action: 'start_studying', title: '勉強を始める', icon: '/icon-96x96.png' },
+      { action: 'snooze', title: '10分後に通知', icon: '/icon-96x96.png' },
+      { action: 'dismiss', title: '後で' }
+    ],
+    dir: 'ltr',
+    lang: 'ja'
+  };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,43 +112,33 @@ export async function POST(request: NextRequest) {
       
       const { subscription, schedule } = scheduleData;
       
-      // 時刻マッチングをチェック（±1分の誤差を許容）
+      // StudyQuest 時刻マッチングをチェック（±1分の誤差を許容）
       const timeMatches = [
-        { type: 'morning', time: schedule.morning, message: 'おはよう！今日も頑張ろう！🌅', title: 'StudyQuest 🌅 朝の学習' },
-        { type: 'afternoon', time: schedule.afternoon, message: '学校お疲れさま！集中して勉強しましょう！📚', title: 'StudyQuest 📚 午後の学習' },
-        { type: 'evening', time: schedule.evening, message: 'ラストスパート！今日の目標を達成しよう！🌙', title: 'StudyQuest 🌙 夜の学習' }
+        { type: 'morning' as const, time: schedule.morning },
+        { type: 'afternoon' as const, time: schedule.afternoon },
+        { type: 'evening' as const, time: schedule.evening }
       ];
       
       for (const timeSlot of timeMatches) {
+        if (!timeSlot.time) continue; // スケジュールが設定されていない場合はスキップ
+        
         const [scheduleHour, scheduleMinute] = timeSlot.time.split(':').map(Number);
         
         // ±1分の範囲で時刻マッチング
         if (Math.abs(currentHour - scheduleHour) === 0 && Math.abs(currentMinute - scheduleMinute) <= 1) {
-          console.log(`🎯 Time match found: ${timeSlot.type} at ${timeSlot.time} for ${key}`);
+          console.log(`🎯 StudyQuest time match found: ${timeSlot.type} at ${timeSlot.time} for ${key}`);
           
           try {
-            const payload = JSON.stringify({
-              title: timeSlot.title,
-              body: timeSlot.message,
-              icon: '/icon-192x192.png',
-              badge: '/icon-96x96.png',
-              data: {
-                url: 'https://studyquest.vercel.app',
-                type: 'scheduled-notification',
-                timeType: timeSlot.type,
-                timestamp: Date.now()
-              },
-              requireInteraction: true,
-              silent: false,
-              vibrate: [200, 100, 200],
-              tag: `studyquest-scheduled-${timeSlot.type}`,
-              actions: [
-                { action: 'open', title: '勉強を始める', icon: '/icon-96x96.png' },
-                { action: 'dismiss', title: '後で' }
-              ]
+            // StudyQuest特化型スケジュール通知ペイロード生成
+            const studyQuestPayload = createStudyQuestScheduledPayload(timeSlot.type, timeSlot.time);
+            
+            console.log('📤 Sending StudyQuest scheduled notification:', {
+              type: timeSlot.type,
+              title: studyQuestPayload.title,
+              time: timeSlot.time
             });
 
-            await webpush.sendNotification(subscription, payload);
+            await webpush.sendNotification(subscription, JSON.stringify(studyQuestPayload));
             
             console.log(`✅ Scheduled notification sent: ${timeSlot.type} to ${key}`);
             sentCount++;

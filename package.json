@@ -11,6 +11,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
     "chart.js": "^4.5.0",
+    "critters": "^0.0.23",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.23.12",
     "next": "15.4.6",

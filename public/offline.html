@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudyQuest - オフライン</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 400px;
+            padding: 40px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .icon {
+            font-size: 72px;
+            margin-bottom: 20px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        h1 {
+            font-size: 28px;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+        
+        p {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            opacity: 0.9;
+        }
+        
+        .features {
+            text-align: left;
+            margin: 30px 0;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+        }
+        
+        .features h3 {
+            font-size: 18px;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+        
+        .features ul {
+            list-style: none;
+        }
+        
+        .features li {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .features li:last-child {
+            border-bottom: none;
+        }
+        
+        .features li::before {
+            content: "✓ ";
+            color: #4ade80;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        
+        .retry-btn {
+            display: inline-block;
+            padding: 14px 28px;
+            background: #6366f1;
+            color: white;
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: background 0.3s ease;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        .retry-btn:hover {
+            background: #5855eb;
+            transform: translateY(-2px);
+        }
+        
+        .status {
+            margin-top: 20px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">📚</div>
+        <h1>StudyQuest</h1>
+        <p>現在オフラインですが、StudyQuestの基本機能は引き続きご利用いただけます。</p>
+        
+        <div class="features">
+            <h3>オフラインで利用可能な機能</h3>
+            <ul>
+                <li>今日のタスク確認</li>
+                <li>学習進捗記録</li>
+                <li>試験スケジュール閲覧</li>
+                <li>設定変更</li>
+                <li>ストリーク記録</li>
+            </ul>
+        </div>
+        
+        <button class="retry-btn" onclick="window.location.reload()">
+            接続を再試行
+        </button>
+        
+        <div class="status" id="status">
+            ネットワーク接続を確認中...
+        </div>
+    </div>
+
+    <script>
+        // ネットワーク状態監視
+        function updateConnectionStatus() {
+            const status = document.getElementById('status');
+            if (navigator.onLine) {
+                status.textContent = 'ネットワークに接続されました';
+                status.style.color = '#4ade80';
+                // 3秒後に自動リロード
+                setTimeout(() => {
+                    window.location.reload();
+                }, 3000);
+            } else {
+                status.textContent = 'オフライン状態です';
+                status.style.color = '#f87171';
+            }
+        }
+
+        // ネットワーク状態の変化を監視
+        window.addEventListener('online', updateConnectionStatus);
+        window.addEventListener('offline', updateConnectionStatus);
+
+        // 初期状態をチェック
+        updateConnectionStatus();
+
+        // 定期的に接続をチェック
+        setInterval(updateConnectionStatus, 5000);
+    </script>
+</body>
+</html>

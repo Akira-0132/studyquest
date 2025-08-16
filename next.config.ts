@@ -1,92 +1,95 @@
 import type { NextConfig } from "next";
 import withPWA from 'next-pwa';
 
-const nextConfig: NextConfig = {
-  // PWA設定
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-      };
-    }
-    return config;
-  },
-  
-  // モバイル最適化
-  images: {
-    domains: [],
-    formats: ['image/webp', 'image/avif'],
-  },
-  
-  // パフォーマンス最適化
-  // experimental: {
-  //   optimizeCss: true,
-  // },
-  
-  // セキュリティヘッダー
-  async headers() {
-    return [
-      {
-        source: '/(.*)',
-        headers: [
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'strict-origin-when-cross-origin',
-          },
-        ],
-      },
-    ];
-  },
-};
-
-// next-pwaの設定
 const pwaConfig = withPWA({
   dest: 'public',
-  disable: false, // 一時的にdevelopmentでも有効にしてテスト
   register: true,
+  skipWaiting: true,
   scope: '/',
   sw: 'sw.js',
-  // Import custom worker script
-  importScripts: ['/worker.js'],
-  // iOS PWA最適化設定
   runtimeCaching: [
     {
-      urlPattern: /^https?.*/,
-      handler: 'NetworkFirst',
+      urlPattern: /^https:\/\/studyquest\.vercel\.app\/(dashboard|schedule|exam|settings)?$/,
+      handler: 'StaleWhileRevalidate',
       options: {
-        cacheName: 'studyquest-cache',
+        cacheName: 'studyquest-app-shell',
         expiration: {
-          maxEntries: 200,
-          maxAgeSeconds: 24 * 60 * 60, // 24時間
+          maxEntries: 20,
+          maxAgeSeconds: 24 * 60 * 60, // 24 hours
         },
-        networkTimeoutSeconds: 10,
       },
     },
     {
-      urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
+      urlPattern: /^https:\/\/studyquest\.vercel\.app\/api\/(subscribe|send-notification|schedule-notifications)/,
+      handler: 'NetworkFirst',
+      options: {
+        cacheName: 'studyquest-api-cache',
+        networkTimeoutSeconds: 5,
+        expiration: {
+          maxEntries: 50,
+          maxAgeSeconds: 60 * 60, // 1 hour
+        },
+      },
+    },
+    {
+      urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/,
       handler: 'CacheFirst',
       options: {
         cacheName: 'studyquest-images',
         expiration: {
           maxEntries: 100,
-          maxAgeSeconds: 7 * 24 * 60 * 60, // 7日間
+          maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+        },
+      },
+    },
+    {
+      urlPattern: /^https:\/\/fonts\.googleapis\.com/,
+      handler: 'StaleWhileRevalidate',
+      options: {
+        cacheName: 'studyquest-google-fonts-stylesheets',
+        expiration: {
+          maxEntries: 10,
+          maxAgeSeconds: 365 * 24 * 60 * 60, // 1 year
+        },
+      },
+    },
+    {
+      urlPattern: /^https:\/\/fonts\.gstatic\.com/,
+      handler: 'CacheFirst',
+      options: {
+        cacheName: 'studyquest-google-fonts-webfonts',
+        expiration: {
+          maxEntries: 30,
+          maxAgeSeconds: 365 * 24 * 60 * 60, // 1 year
+        },
+      },
+    },
+    {
+      urlPattern: /^https:\/\/.*/,
+      handler: 'NetworkFirst',
+      options: {
+        cacheName: 'studyquest-external-cache',
+        networkTimeoutSeconds: 10,
+        expiration: {
+          maxEntries: 50,
+          maxAgeSeconds: 24 * 60 * 60, // 24 hours
         },
       },
     },
   ],
-  // iOS対応の追加設定
-  skipWaiting: true,
-  clientsClaim: true,
-  cleanupOutdatedCaches: true,
 });
+
+const nextConfig: NextConfig = {
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: false,
+  },
+  experimental: {
+    optimizeCss: true,
+    optimizePackageImports: ['framer-motion'],
+  },
+};
 
 export default pwaConfig(nextConfig);

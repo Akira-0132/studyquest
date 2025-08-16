@@ -1,16 +1,18 @@
 {
   "name": "StudyQuest - 中学生向け試験対策アプリ",
   "short_name": "StudyQuest",
-  "description": "ゲーミフィケーションで楽しく勉強できる中学生向け試験対策アプリ",
+  "description": "ゲーミフィケーションで楽しく勉強できる中学生向け試験対策アプリ。試験スケジュールの管理、自動学習プラン生成、ストリーク機能で継続的な学習をサポート。",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#111827",
   "theme_color": "#6366F1",
   "orientation": "portrait-primary",
-  "categories": ["education", "productivity"],
+  "categories": ["education", "productivity", "games"],
   "lang": "ja",
   "scope": "/",
   "prefer_related_applications": false,
+  "dir": "ltr",
+  
   "icons": [
     {
       "src": "/icon-96x96.png",
@@ -35,22 +37,144 @@
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
+  
   "shortcuts": [
     {
       "name": "今日のタスク",
       "short_name": "タスク",
-      "description": "今日のタスクを確認",
-      "url": "/",
-      "icons": [{ "src": "/icon-96x96.png", "sizes": "96x96" }]
+      "description": "今日の学習タスクを確認してストリークを継続",
+      "url": "/?from=shortcut",
+      "icons": [{ 
+        "src": "/icon-96x96.png", 
+        "sizes": "96x96",
+        "type": "image/png" 
+      }]
     },
     {
       "name": "試験登録", 
       "short_name": "登録",
-      "description": "新しい試験を登録",
-      "url": "/exam/new",
-      "icons": [{ "src": "/icon-96x96.png", "sizes": "96x96" }]
+      "description": "新しい試験を登録して学習プランを自動生成",
+      "url": "/exam/new?from=shortcut",
+      "icons": [{ 
+        "src": "/icon-96x96.png", 
+        "sizes": "96x96",
+        "type": "image/png" 
+      }]
+    },
+    {
+      "name": "スケジュール",
+      "short_name": "予定",
+      "description": "試験スケジュールと学習進捗を確認",
+      "url": "/schedule?from=shortcut",
+      "icons": [{ 
+        "src": "/icon-96x96.png", 
+        "sizes": "96x96",
+        "type": "image/png" 
+      }]
+    },
+    {
+      "name": "設定",
+      "short_name": "設定",
+      "description": "通知設定とアプリの詳細設定",
+      "url": "/settings?from=shortcut",
+      "icons": [{ 
+        "src": "/icon-96x96.png", 
+        "sizes": "96x96",
+        "type": "image/png" 
+      }]
+    }
+  ],
+  
+  "screenshots": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "828x1792",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "StudyQuest ダッシュボード - 今日のタスクとストリーク"
+    },
+    {
+      "src": "/icon-192x192.png", 
+      "sizes": "1200x800",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "StudyQuest 学習管理画面"
+    }
+  ],
+  
+  "related_applications": [],
+  
+  "protocol_handlers": [
+    {
+      "protocol": "web+studyquest",
+      "url": "/?action=%s"
+    }
+  ],
+  
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  
+  "file_handlers": [
+    {
+      "action": "/exam/import",
+      "accept": {
+        "text/csv": [".csv"],
+        "application/json": [".json"]
+      },
+      "icons": [
+        {
+          "src": "/icon-96x96.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ],
+      "launch_type": "single-client"
+    }
+  ],
+  
+  "share_target": {
+    "action": "/exam/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "file",
+          "accept": ["image/*", "text/plain", ".csv"]
+        }
+      ]
+    }
+  },
+  
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  
+  "iarc_rating_id": "",
+  
+  "handles": [
+    {
+      "origin": "https://studyquest.vercel.app"
     }
   ]
 }
