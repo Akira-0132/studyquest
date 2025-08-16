@@ -116,20 +116,53 @@ export default function SettingsPage() {
             });
             addDebugLog(`✅ SW自動登録完了: ${registration.scope}`);
             
-            // アクティブになるまで少し待つ
+            // アクティブになるまで待つ（タイムアウト付き）
             if (registration.installing) {
               addDebugLog('⏳ SW activation待機中...');
-              await new Promise((resolve) => {
-                const checkState = () => {
-                  if (registration!.active) {
-                    addDebugLog('✅ SW activated');
+              
+              try {
+                await new Promise((resolve, reject) => {
+                  const timeout = setTimeout(() => {
+                    addDebugLog('⚠️ SW activation timeout - proceeding anyway');
                     resolve(undefined);
-                  } else {
-                    setTimeout(checkState, 100);
-                  }
-                };
-                checkState();
-              });
+                  }, 5000); // 5秒でタイムアウト
+                  
+                  const checkState = () => {
+                    addDebugLog(`🔍 SW state check: installing=${!!registration!.installing}, waiting=${!!registration!.waiting}, active=${!!registration!.active}`);
+                    
+                    if (registration!.active) {
+                      clearTimeout(timeout);
+                      addDebugLog('✅ SW activated successfully');
+                      resolve(undefined);
+                    } else if (registration!.waiting) {
+                      // waiting状態の場合はskipWaitingを促す
+                      addDebugLog('📋 SW waiting - triggering skipWaiting');
+                      registration!.waiting.postMessage({ type: 'SKIP_WAITING' });
+                      setTimeout(checkState, 200);
+                    } else if (registration!.installing) {
+                      // まだinstalling中
+                      setTimeout(checkState, 200);
+                    } else {
+                      // 予期しない状態
+                      clearTimeout(timeout);
+                      addDebugLog('⚠️ SW in unexpected state - proceeding');
+                      resolve(undefined);
+                    }
+                  };
+                  
+                  // 最初のチェック
+                  setTimeout(checkState, 100);
+                });
+                
+              } catch (activationError) {
+                addDebugLog(`⚠️ SW activation error: ${activationError} - proceeding anyway`);
+              }
+            } else if (registration.waiting) {
+              addDebugLog('📋 SW waiting detected - activating');
+              registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            } else if (registration.active) {
+              addDebugLog('✅ SW already active');
             }
           } catch (swError) {
             addDebugLog(`❌ SW自動登録失敗: ${swError}`);
@@ -844,16 +877,37 @@ export default function SettingsPage() {
                         addDebugLog(`✅ 新SW登録完了: ${newReg.scope}`);
                         addDebugLog(`SW状態: installing=${!!newReg.installing}, waiting=${!!newReg.waiting}, active=${!!newReg.active}`);
                         
-                        // アクティブになるまで待つ
-                        if (newReg.installing) {
+                        // アクティブになるまで待つ（改良版）
+                        if (newReg.installing || newReg.waiting) {
                           addDebugLog('⏳ SW activation待機中...');
+                          
                           await new Promise((resolve) => {
-                            newReg.installing!.addEventListener('statechange', () => {
-                              if (newReg.installing!.state === 'activated') {
-                                addDebugLog('✅ SW activated');
+                            const timeout = setTimeout(() => {
+                              addDebugLog('⚠️ Manual SW activation timeout - checking final state');
+                              resolve(undefined);
+                            }, 8000); // 8秒でタイムアウト
+                            
+                            const checkState = () => {
+                              addDebugLog(`🔍 Manual SW state: installing=${!!newReg.installing}, waiting=${!!newReg.waiting}, active=${!!newReg.active}`);
+                              
+                              if (newReg.active) {
+                                clearTimeout(timeout);
+                                addDebugLog('✅ Manual SW activated successfully');
+                                resolve(undefined);
+                              } else if (newReg.waiting) {
+                                addDebugLog('📋 Manual SW waiting - triggering skipWaiting');
+                                newReg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                                setTimeout(checkState, 300);
+                              } else if (newReg.installing) {
+                                setTimeout(checkState, 300);
+                              } else {
+                                clearTimeout(timeout);
+                                addDebugLog('⚠️ Manual SW unexpected state - done');
                                 resolve(undefined);
                               }
-                            });
+                            };
+                            
+                            setTimeout(checkState, 200);
                           });
                         }
                         
