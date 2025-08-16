@@ -25,6 +25,11 @@ export default function SettingsPage() {
     morning: '07:00',
     afternoon: '16:00',
     evening: '20:00',
+    schedule: {
+      morning: '07:00',
+      afternoon: '16:00',
+      evening: '20:00'
+    }
   });
 
   const [userData, setUserData] = useState({
@@ -203,7 +208,8 @@ export default function SettingsPage() {
       // スケジュール設定
       addDebugLog('📋 Step 3: スケジュール通知設定');
       try {
-        const success = await scheduleNotifications(notificationSettings);
+        await scheduleNotifications();
+        const success = true;
         if (success) {
           addDebugLog('✅ スケジュール通知設定完了');
           
@@ -358,14 +364,21 @@ export default function SettingsPage() {
 
   // 通知時刻変更
   const updateNotificationTime = async (type: string, time: string) => {
-    const newSettings = { ...notificationSettings, [type]: time };
+    const newSettings = { 
+      ...notificationSettings, 
+      [type]: time,
+      schedule: {
+        ...notificationSettings.schedule,
+        [type]: time
+      }
+    };
     setNotificationSettings(newSettings);
     localStorage.setItem('studyquest_notifications', JSON.stringify(newSettings));
     
     // 有効な場合は再スケジュール
     if (newSettings.enabled) {
       try {
-        await scheduleNotifications(newSettings);
+        await scheduleNotifications();
         addDebugLog(`⏰ ${type}の通知時刻を${time}に更新`);
       } catch (error) {
         addDebugLog(`❌ 時刻更新エラー: ${error}`);
