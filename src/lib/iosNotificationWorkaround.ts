@@ -274,9 +274,9 @@ export class IOSNotificationWorkaround {
     const times: number[] = [];
 
     // 今日の通知時刻をチェック（時刻文字列のみを処理）
-    const timeKeys = ['morning', 'afternoon', 'evening'];
+    const timeKeys = ['morning', 'afternoon', 'evening'] as const;
     for (const period of timeKeys) {
-      const timeStr = settings[period] || settings.schedule?.[period];
+      const timeStr = settings[period];
       if (typeof timeStr === 'string' && timeStr.includes(':')) {
         try {
           const [hours, minutes] = timeStr.split(':').map(Number);
