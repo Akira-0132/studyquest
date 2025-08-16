@@ -284,19 +284,60 @@ export default function SettingsPage() {
     // ユーザーデータを読み込み
     setUserData(getUserData());
     
+    // 🔍 詳細なモバイル環境診断
+    const performMobileEnvironmentDiagnosis = () => {
+      addDebugLog('📱 === MOBILE ENVIRONMENT DIAGNOSIS ===');
+      addDebugLog(`User Agent: ${navigator.userAgent}`);
+      addDebugLog(`Platform: ${navigator.platform || 'unknown'}`);
+      addDebugLog(`Language: ${navigator.language}`);
+      addDebugLog(`Online: ${navigator.onLine}`);
+      addDebugLog(`Screen: ${screen.width}x${screen.height}, ${screen.orientation?.type || 'unknown'}`);
+      addDebugLog(`Viewport: ${window.innerWidth}x${window.innerHeight}`);
+      addDebugLog(`Device Pixel Ratio: ${window.devicePixelRatio}`);
+      addDebugLog(`Touch Support: ${'ontouchstart' in window}`);
+      addDebugLog(`PWA Mode: ${window.matchMedia('(display-mode: standalone)').matches}`);
+      addDebugLog(`HTTPS: ${location.protocol === 'https:'}`);
+      addDebugLog(`Service Worker: ${'serviceWorker' in navigator}`);
+      addDebugLog(`Push Manager: ${!!(navigator.serviceWorker && (navigator as any).serviceWorker.pushManager)}`);
+      addDebugLog(`Notification API: ${'Notification' in window}`);
+      addDebugLog(`Permission: ${Notification.permission || 'unknown'}`);
+      
+      // iOS特有の診断
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+      addDebugLog(`iOS Device: ${isIOS}`);
+      addDebugLog(`Safari Browser: ${isSafari}`);
+      
+      if (isIOS) {
+        addDebugLog(`iOS Version: ${(/OS (\d+)_(\d+)_?(\d+)?/.exec(navigator.userAgent) || ['', '0', '0', '0']).slice(1).join('.')}`);
+        addDebugLog(`Standalone Mode: ${(navigator as any).standalone === true}`);
+      }
+      
+      addDebugLog('📱 === END MOBILE DIAGNOSIS ===');
+    };
+    
+    performMobileEnvironmentDiagnosis();
+    
     // 通知設定を読み込み
     const saved = localStorage.getItem('studyquest_notifications');
     if (saved) {
-      const settings = JSON.parse(saved);
-      setNotificationSettings(settings);
-      
-      // 通知が有効な場合はスケジューラーを開始
-      if (settings.enabled) {
-        addDebugLog('🚀 Auto-starting notification scheduler (notifications enabled)...');
-        startNotificationScheduler();
-        setSchedulerStatus(getSchedulerStatus());
-        updateNextNotificationInfo(settings);
+      try {
+        const settings = JSON.parse(saved);
+        setNotificationSettings(settings);
+        addDebugLog(`💾 Loaded notification settings: ${JSON.stringify(settings)}`);
+        
+        // 通知が有効な場合はスケジューラーを開始
+        if (settings.enabled) {
+          addDebugLog('🚀 Auto-starting notification scheduler (notifications enabled)...');
+          startNotificationScheduler();
+          setSchedulerStatus(getSchedulerStatus());
+          updateNextNotificationInfo(settings);
+        }
+      } catch (error) {
+        addDebugLog(`❌ Failed to parse saved settings: ${error}`);
       }
+    } else {
+      addDebugLog('💾 No saved notification settings found');
     }
 
     // iOS PWA環境の初期診断
@@ -310,10 +351,11 @@ export default function SettingsPage() {
         setDeviceInfo({ isIOS, isPWA, notificationSupported });
         
         // PWA状態をチェック
-        addDebugLog(`📱 Device Environment:`);
+        addDebugLog(`📱 Device Environment Details:`);
         addDebugLog(`- iOS Device: ${isIOS}`);
         addDebugLog(`- PWA Mode: ${isPWA}`);
         addDebugLog(`- Notification Support: ${notificationSupported.supported}`);
+        addDebugLog(`- Support Reason: ${notificationSupported.reason || 'N/A'}`);
         
         if (isIOS) {
           if (!isPWA) {
@@ -340,6 +382,21 @@ export default function SettingsPage() {
     };
 
     initializeIOSEnvironment();
+    
+    // 🔄 5秒後に自動で設定状態をチェック
+    const checkInterval = setInterval(() => {
+      const currentSettings = localStorage.getItem('studyquest_notifications');
+      if (currentSettings) {
+        try {
+          const parsed = JSON.parse(currentSettings);
+          addDebugLog(`🔄 Settings check: enabled=${parsed.enabled}, times=${parsed.morning},${parsed.afternoon},${parsed.evening}`);
+        } catch (e) {
+          addDebugLog('❌ Settings check failed');
+        }
+      }
+    }, 5000);
+    
+    return () => clearInterval(checkInterval);
   }, []);
 
   return (
@@ -595,8 +652,144 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* デバッグパネル */}
+            {/* モバイル専用診断パネル */}
             <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={async () => {
+                    addDebugLog('🔍 === モバイル詳細診断開始 ===');
+                    
+                    // 基本情報
+                    addDebugLog(`現在時刻: ${new Date().toLocaleString('ja-JP')}`);
+                    addDebugLog(`ページURL: ${window.location.href}`);
+                    
+                    // 通知権限状態
+                    addDebugLog(`通知権限: ${Notification.permission}`);
+                    
+                    // Service Worker状態
+                    if ('serviceWorker' in navigator) {
+                      try {
+                        const registration = await navigator.serviceWorker.getRegistration();
+                        addDebugLog(`SW登録: ${!!registration}`);
+                        if (registration) {
+                          const subscription = await registration.pushManager.getSubscription();
+                          addDebugLog(`プッシュ購読: ${!!subscription}`);
+                          if (subscription) {
+                            addDebugLog(`エンドポイント: ${subscription.endpoint.substring(0, 30)}...`);
+                          }
+                        }
+                      } catch (error) {
+                        addDebugLog(`SW確認エラー: ${error}`);
+                      }
+                    }
+                    
+                    // LocalStorage状態
+                    const savedSettings = localStorage.getItem('studyquest_notifications');
+                    addDebugLog(`保存設定: ${savedSettings || 'なし'}`);
+                    
+                    addDebugLog('🔍 === 診断完了 ===');
+                    alert('📱 モバイル診断完了！デバッグログを確認してください。');
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 px-3 rounded transition-colors"
+                >
+                  📱 モバイル診断
+                </button>
+                
+                <button
+                  onClick={() => {
+                    addDebugLog('🗑️ LocalStorage and debug logs cleared');
+                    localStorage.removeItem('studyquest_notifications');
+                    setDebugLogs([]);
+                    setNotificationSettings({
+                      enabled: false,
+                      morning: '07:00',
+                      afternoon: '16:00',
+                      evening: '20:00',
+                      schedule: {
+                        morning: '07:00',
+                        afternoon: '16:00',
+                        evening: '20:00'
+                      }
+                    });
+                    alert('🗑️ 設定とログをリセットしました');
+                  }}
+                  className="bg-red-600 hover:bg-red-700 text-white text-xs py-2 px-3 rounded transition-colors"
+                >
+                  🗑️ リセット
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={async () => {
+                    addDebugLog('🔄 Service Worker強制更新開始...');
+                    try {
+                      if ('serviceWorker' in navigator) {
+                        const registrations = await navigator.serviceWorker.getRegistrations();
+                        for (let registration of registrations) {
+                          addDebugLog(`SW登録解除: ${registration.scope}`);
+                          await registration.unregister();
+                        }
+                        addDebugLog('✅ 全SW登録解除完了');
+                        
+                        // 新しくService Workerを登録
+                        const newReg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+                        addDebugLog(`✅ 新SW登録完了: ${newReg.scope}`);
+                        
+                        alert('🔄 Service Worker更新完了！ページを再読み込みしてください。');
+                      }
+                    } catch (error) {
+                      addDebugLog(`❌ SW更新エラー: ${error}`);
+                      alert('❌ Service Worker更新に失敗しました');
+                    }
+                  }}
+                  className="bg-purple-600 hover:bg-purple-700 text-white text-xs py-2 px-3 rounded transition-colors"
+                >
+                  🔄 SW更新
+                </button>
+                
+                <button
+                  onClick={async () => {
+                    addDebugLog('🗑️ キャッシュクリア開始...');
+                    try {
+                      // Cache API でキャッシュクリア
+                      if ('caches' in window) {
+                        const cacheNames = await caches.keys();
+                        for (const name of cacheNames) {
+                          await caches.delete(name);
+                          addDebugLog(`🗑️ キャッシュ削除: ${name}`);
+                        }
+                      }
+                      
+                      // LocalStorageクリア
+                      localStorage.clear();
+                      addDebugLog('🗑️ LocalStorage cleared');
+                      
+                      // 状態リセット
+                      setNotificationSettings({
+                        enabled: false,
+                        morning: '07:00',
+                        afternoon: '16:00',
+                        evening: '20:00',
+                        schedule: {
+                          morning: '07:00',
+                          afternoon: '16:00',
+                          evening: '20:00'
+                        }
+                      });
+                      
+                      alert('🗑️ キャッシュクリア完了！ページを再読み込みしてください。');
+                    } catch (error) {
+                      addDebugLog(`❌ キャッシュクリアエラー: ${error}`);
+                      alert('❌ キャッシュクリアに失敗しました');
+                    }
+                  }}
+                  className="bg-orange-600 hover:bg-orange-700 text-white text-xs py-2 px-3 rounded transition-colors"
+                >
+                  🗑️ キャッシュクリア
+                </button>
+              </div>
+              
               <button
                 onClick={() => setShowDebugPanel(!showDebugPanel)}
                 className="w-full bg-gray-600 hover:bg-gray-700 text-white text-sm py-2 px-4 rounded-lg transition-colors"
