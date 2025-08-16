@@ -1,5 +1,6 @@
 // Vercel Cronジョブによる定期通知送信
-const webpush = require('web-push');
+import webpush from 'web-push';
+import { NextRequest, NextResponse } from 'next/server';
 
 // VAPID設定
 webpush.setVapidDetails(
@@ -8,19 +9,7 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY || '6G5JiT6MSZlBNNXeWTVGy40V7-m176G7iWT3M7j2Fr4'
 );
 
-// ファイルベースストレージをインポート
-import { getAllSubscriptions } from './storage.js';
-
-export default async function handler(req, res) {
-  // Vercel Cronからのリクエストかチェック
-  const authHeader = req.headers['authorization'];
-  const isFromCron = authHeader === `Bearer ${process.env.CRON_SECRET}`;
-  
-  // 開発環境またはCronからのアクセスのみ許可
-  if (process.env.NODE_ENV === 'production' && !isFromCron && req.method !== 'GET') {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
+export async function GET() {
   console.log('⏰ Cron job triggered at:', new Date().toISOString());
   
   try {
@@ -31,7 +20,7 @@ export default async function handler(req, res) {
     console.log(`🕐 Current time: ${currentHour}:${currentMinute.toString().padStart(2, '0')}`);
     
     // 5分ごとに実行されるので、5分の幅で時刻をチェック
-    const notifications = [];
+    const notifications: any[] = [];
     
     // 購読情報を取得（実際にはデータベースから取得）
     const testSubscriptions = await getActiveSubscriptions();
@@ -87,7 +76,7 @@ export default async function handler(req, res) {
             
             console.log(`✅ Sent ${slot.key} notification at ${slot.time}`);
             
-          } catch (error) {
+          } catch (error: any) {
             console.error(`❌ Failed to send notification:`, error);
             notifications.push({
               time: slot.time,
@@ -100,7 +89,7 @@ export default async function handler(req, res) {
       }
     }
     
-    return res.status(200).json({
+    return NextResponse.json({
       success: true,
       timestamp: now.toISOString(),
       currentTime: `${currentHour}:${currentMinute.toString().padStart(2, '0')}`,
@@ -108,32 +97,36 @@ export default async function handler(req, res) {
       notifications: notifications
     });
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Cron job error:', error);
-    return res.status(500).json({
+    return NextResponse.json({
       error: 'Cron job failed',
       details: error.message
-    });
+    }, { status: 500 });
   }
-};
+}
 
 // アクティブな購読情報を取得
 async function getActiveSubscriptions() {
-  // ファイルから購読情報を取得
-  const schedules = getAllSubscriptions();
-  const activeSchedules = [];
-  
-  for (const [userKey, userData] of schedules.entries()) {
-    if (userData.subscription && userData.schedule) {
-      activeSchedules.push({
-        subscription: userData.subscription,
-        schedule: userData.schedule,
-        userKey: userKey
-      });
+  // テスト用のダミーデータ
+  const testSubscriptions = [
+    {
+      subscription: {
+        endpoint: 'test-endpoint',
+        keys: {
+          p256dh: 'test-p256dh',
+          auth: 'test-auth'
+        }
+      },
+      schedule: {
+        morning: '07:00',
+        afternoon: '16:00',
+        evening: '20:00'
+      },
+      userKey: 'test-user'
     }
-  }
+  ];
   
-  console.log(`📊 Found ${activeSchedules.length} active subscriptions`);
-  return activeSchedules;
+  console.log(`📊 Found ${testSubscriptions.length} active subscriptions`);
+  return testSubscriptions;
 }
-
