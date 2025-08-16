@@ -273,17 +273,25 @@ export class IOSNotificationWorkaround {
 
     const times: number[] = [];
 
-    // 今日の通知時刻をチェック
-    for (const [period, timeStr] of Object.entries(settings)) {
-      const [hours, minutes] = timeStr.split(':').map(Number);
-      const notificationTime = new Date(today.getTime() + hours * 60 * 60 * 1000 + minutes * 60 * 1000);
-      
-      if (notificationTime > now) {
-        times.push(notificationTime.getTime());
-      } else {
-        // 今日の時刻が過ぎていれば明日の時刻を追加
-        const tomorrowTime = new Date(tomorrow.getTime() + hours * 60 * 60 * 1000 + minutes * 60 * 1000);
-        times.push(tomorrowTime.getTime());
+    // 今日の通知時刻をチェック（時刻文字列のみを処理）
+    const timeKeys = ['morning', 'afternoon', 'evening'];
+    for (const period of timeKeys) {
+      const timeStr = settings[period] || settings.schedule?.[period];
+      if (typeof timeStr === 'string' && timeStr.includes(':')) {
+        try {
+          const [hours, minutes] = timeStr.split(':').map(Number);
+          const notificationTime = new Date(today.getTime() + hours * 60 * 60 * 1000 + minutes * 60 * 1000);
+          
+          if (notificationTime > now) {
+            times.push(notificationTime.getTime());
+          } else {
+            // 今日の時刻が過ぎていれば明日の時刻を追加
+            const tomorrowTime = new Date(tomorrow.getTime() + hours * 60 * 60 * 1000 + minutes * 60 * 1000);
+            times.push(tomorrowTime.getTime());
+          }
+        } catch (error) {
+          this.addDebugLog(`⚠️ Invalid time format for ${period}: ${timeStr}`);
+        }
       }
     }
 
