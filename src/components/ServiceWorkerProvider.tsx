@@ -4,12 +4,13 @@ import { useEffect } from 'react';
 
 export function ServiceWorkerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
-    // Service Workerの登録（ブラウザ環境でのみ実行）
+    // next-pwaが自動でService Workerを登録するため、手動登録は削除
+    // 代わりにService Workerの準備を待つ
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker
-        .register('/sw.js')
+      // next-pwaによる自動登録の完了を待つ
+      navigator.serviceWorker.ready
         .then((registration) => {
-          console.log('Service Worker registered successfully:', registration);
+          console.log('Service Worker ready (via next-pwa):', registration);
           
           // プッシュ通知の購読
           if ('PushManager' in window) {
@@ -17,7 +18,7 @@ export function ServiceWorkerProvider({ children }: { children: React.ReactNode 
           }
         })
         .catch((error) => {
-          console.log('Service Worker registration failed:', error);
+          console.log('Service Worker ready failed:', error);
         });
     }
 

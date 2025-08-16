@@ -103,10 +103,10 @@ export function isiOSNotificationSupported(): {
 }
 
 /**
- * Service Workerを登録（iOS PWA対応強化版）
+ * Service Worker待機（next-pwa対応版）
  */
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
-  console.log('🔄 Service Worker registration starting (iOS PWA optimized)...');
+  console.log('🔄 Service Worker waiting for next-pwa registration (iOS PWA optimized)...');
   
   if (!('serviceWorker' in navigator)) {
     console.error('❌ Service Worker not supported in this browser');
@@ -131,13 +131,10 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
     console.log('- Notification:', 'Notification' in window);
     console.log('- Background Sync:', 'serviceWorker' in navigator && 'sync' in window.ServiceWorkerRegistration.prototype);
     
-    const registration = await navigator.serviceWorker.register('/sw.js', {
-      scope: '/',
-      // iOS向けの更新戦略
-      updateViaCache: 'none'
-    });
+    // next-pwaによる自動登録の完了を待つ
+    const registration = await navigator.serviceWorker.ready;
     
-    console.log('✅ Service Worker registered successfully');
+    console.log('✅ Service Worker ready (next-pwa managed)!');
     console.log('- Scope:', registration.scope);
     console.log('- Active:', !!registration.active);
     console.log('- Installing:', !!registration.installing);
