@@ -52,6 +52,32 @@ export class IOSNotificationWorkaround {
           if (registration && !registration.pushManager) {
             issues.push('PushManager unavailable (iOS Safari bug)');
             recommendations.push('Close Safari completely and reopen the PWA');
+          } else if (registration && registration.pushManager) {
+            // プッシュ購読の健全性チェック
+            try {
+              const subscription = await registration.pushManager.getSubscription();
+              if (subscription) {
+                // 購読の有効性をテスト
+                const subscriptionTest = await this.testSubscriptionHealth(subscription);
+                if (!subscriptionTest.valid) {
+                  issues.push(`Push subscription invalid: ${subscriptionTest.reason}`);
+                  recommendations.push('Re-enable notifications to create new subscription');
+                }
+                
+                // Silent push カウンターチェック
+                const silentPushCount = parseInt(localStorage.getItem('ios_silent_push_count') || '0');
+                if (silentPushCount >= 2) {
+                  issues.push(`High silent push count: ${silentPushCount}/3 (risk of termination)`);
+                  recommendations.push('Send test notification to reset silent push counter');
+                }
+              } else {
+                issues.push('No active push subscription found');
+                recommendations.push('Enable notifications to create subscription');
+              }
+            } catch (subscriptionError) {
+              issues.push(`Push subscription check failed: ${(subscriptionError as Error).message}`);
+              recommendations.push('Re-enable notifications');
+            }
           }
         } catch (error) {
           issues.push(`Service Worker error: ${(error as Error).message}`);
@@ -91,6 +117,72 @@ export class IOSNotificationWorkaround {
         issues: [`Health check failed: ${(error as Error).message}`],
         recommendations: ['Restart the app']
       };
+    }
+  }
+
+  /**
+   * プッシュ購読の健全性テスト
+   */
+  private async testSubscriptionHealth(subscription: PushSubscription): Promise<{
+    valid: boolean;
+    reason?: string;
+  }> {
+    try {
+      this.addDebugLog('🔍 Testing push subscription health...');
+      
+      // 基本的なプロパティチェック
+      if (!subscription.endpoint) {
+        return { valid: false, reason: 'Missing endpoint' };
+      }
+      
+      // キーの存在確認
+      const p256dhKey = subscription.getKey('p256dh');
+      const authKey = subscription.getKey('auth');
+      
+      if (!p256dhKey || !authKey) {
+        return { valid: false, reason: 'Missing encryption keys' };
+      }
+      
+      // iOS Safari PWA: toJSON()バグチェック
+      try {
+        const jsonTest = subscription.toJSON();
+        if (!jsonTest.endpoint || !jsonTest.keys) {
+          return { valid: false, reason: 'toJSON() returns incomplete data' };
+        }
+      } catch (jsonError) {
+        this.addDebugLog('⚠️ subscription.toJSON() bug detected (iOS Safari PWA known issue)');
+        // これは既知のバグなので、他の手段でテスト継続
+      }
+      
+      // サーバー側での購読テスト（軽量なping）
+      try {
+        const response = await fetch('/api/subscription-health-check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: subscription.endpoint.substring(0, 100) // 最初の100文字のみでテスト
+          })
+        });
+        
+        if (!response.ok) {
+          return { valid: false, reason: `Server health check failed: ${response.status}` };
+        }
+        
+        const result = await response.json();
+        if (!result.valid) {
+          return { valid: false, reason: result.reason || 'Server validation failed' };
+        }
+      } catch (serverError) {
+        this.addDebugLog(`⚠️ Server health check failed: ${serverError}`);
+        // サーバーエラーは購読自体の問題ではないのでcontinue
+      }
+      
+      this.addDebugLog('✅ Push subscription appears healthy');
+      return { valid: true };
+      
+    } catch (error) {
+      this.addDebugLog(`❌ Subscription health test failed: ${error}`);
+      return { valid: false, reason: (error as Error).message };
     }
   }
 

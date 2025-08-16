@@ -82,90 +82,192 @@ self.addEventListener('fetch', (event) => {
 
 // プッシュ通知受信（iOS Safari PWA最適化版）
 self.addEventListener('push', (event) => {
+  const pushEventId = Math.random().toString(36).substr(2, 9);
   console.log('📱 Push event received (iOS PWA):', {
+    pushEventId,
     hasData: !!event.data,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    origin: self.location.origin
   });
   
-  let notificationData = {
-    title: 'StudyQuest',
-    body: '📚 勉強の時間です！',
-    icon: '/icon-192x192.png',
-    badge: '/icon-96x96.png',
-    tag: 'studyquest-push',
-    requireInteraction: true, // iOS向けに永続化
-    silent: false,
-    vibrate: [200, 100, 200], // iOS対応
-    data: {
-      timestamp: Date.now(),
-      url: '/',
-      source: 'background-push'
-    },
-    actions: [
-      {
-        action: 'open',
-        title: 'アプリを開く',
-        icon: '/icon-96x96.png'
-      },
-      {
-        action: 'dismiss',
-        title: '閉じる'
-      }
-    ]
-  };
-
-  // プッシュデータがある場合は解析（iOS対応）
-  if (event.data) {
+  // iOS Silent Push Detection and Tracking
+  const trackPushEvent = async () => {
     try {
-      const receivedData = event.data.json();
-      console.log('📦 Push data received:', receivedData);
-      notificationData = {
-        ...notificationData,
-        ...receivedData,
-        data: {
-          ...notificationData.data,
-          ...receivedData.data
-        }
-      };
-    } catch (e) {
-      console.warn('⚠️ Push data parsing failed, using text:', e);
-      notificationData.body = event.data.text() || notificationData.body;
+      // 既存のsilent push カウンターを取得
+      let silentPushCount = 0;
+      try {
+        const existingCount = await self.clients.matchAll().then(clients => {
+          return new Promise((resolve) => {
+            if (clients.length > 0) {
+              const messageChannel = new MessageChannel();
+              messageChannel.port1.onmessage = (e) => {
+                resolve(e.data.silentPushCount || 0);
+              };
+              clients[0].postMessage({
+                type: 'GET_SILENT_PUSH_COUNT'
+              }, [messageChannel.port2]);
+            } else {
+              resolve(0);
+            }
+          });
+        });
+        silentPushCount = parseInt(existingCount) || 0;
+      } catch (e) {
+        console.warn('⚠️ Could not retrieve silent push count:', e);
+      }
+      
+      console.log(`📊 Current silent push count: ${silentPushCount}/3`);
+      
+      if (silentPushCount >= 2) {
+        console.warn(`🚨 HIGH SILENT PUSH COUNT WARNING: ${silentPushCount}/3 - Subscription at risk!`);
+      }
+      
+    } catch (trackError) {
+      console.warn('⚠️ Failed to track push event:', trackError);
     }
-  }
+  };
+  
+  // CRITICAL: iOS Safari PWA requires IMMEDIATE event.waitUntil() call
+  // Without this, iOS treats push as "silent" and terminates subscription after 3 silent pushes
+  const handlePush = async () => {
+    // Track the push event first
+    await trackPushEvent();
+    let notificationData = {
+      title: 'StudyQuest',
+      body: '📚 勉強の時間です！',
+      icon: '/icon-192x192.png',
+      badge: '/icon-96x96.png',
+      tag: 'studyquest-push',
+      requireInteraction: true, // iOS向けに永続化
+      silent: false, // CRITICAL: NEVER set to true on iOS
+      vibrate: [200, 100, 200], // iOS対応
+      renotify: true, // iOS向け
+      data: {
+        timestamp: Date.now(),
+        url: '/',
+        source: 'background-push',
+        pushEventId: Math.random().toString(36).substr(2, 9)
+      },
+      actions: [
+        {
+          action: 'open',
+          title: 'アプリを開く',
+          icon: '/icon-96x96.png'
+        },
+        {
+          action: 'dismiss',
+          title: '閉じる'
+        }
+      ]
+    };
 
-  // iOS固有のIndexedDBアクセス問題対策
-  const showNotification = async () => {
+    // プッシュデータがある場合は解析（iOS対応）
+    if (event.data) {
+      try {
+        const receivedData = event.data.json();
+        console.log('📦 Push data received:', receivedData);
+        notificationData = {
+          ...notificationData,
+          ...receivedData,
+          // iOS: 確実にsilent=falseを維持
+          silent: false,
+          data: {
+            ...notificationData.data,
+            ...receivedData.data
+          }
+        };
+      } catch (e) {
+        console.warn('⚠️ Push data parsing failed, using text:', e);
+        notificationData.body = event.data.text() || notificationData.body;
+      }
+    }
+
+    // iOS固有のバグ対策とnotification display
     try {
       // iOS 18.1.1+ IndexedDBバグ対策
       if (typeof indexedDB === 'undefined') {
         console.warn('⚠️ IndexedDB unavailable in push context (iOS bug)');
       }
       
-      await self.registration.showNotification(notificationData.title, {
+      // CRITICAL: Ensure notification is displayed to prevent silent push
+      const notification = await self.registration.showNotification(notificationData.title, {
         body: notificationData.body,
         icon: notificationData.icon,
         badge: notificationData.badge,
         tag: notificationData.tag,
         requireInteraction: notificationData.requireInteraction,
-        silent: notificationData.silent,
+        silent: false, // NEVER allow silent notifications on iOS
         vibrate: notificationData.vibrate,
+        renotify: notificationData.renotify,
         data: notificationData.data,
         actions: notificationData.actions
       });
       
-      console.log('✅ Notification shown successfully');
+      console.log('✅ iOS PWA notification displayed successfully');
+      console.log('- Notification tag:', notificationData.tag);
+      console.log('- Silent:', false);
+      console.log('- RequireInteraction:', notificationData.requireInteraction);
+      
+      // iOS-specific: Track notification display for debugging
+      try {
+        await self.clients.matchAll().then(clients => {
+          clients.forEach(client => {
+            client.postMessage({
+              type: 'NOTIFICATION_DISPLAYED',
+              notification: {
+                title: notificationData.title,
+                body: notificationData.body,
+                tag: notificationData.tag,
+                timestamp: Date.now()
+              }
+            });
+          });
+        });
+      } catch (clientError) {
+        console.warn('⚠️ Failed to notify clients of notification display:', clientError);
+      }
+      
+      return notification;
+      
     } catch (error) {
-      console.error('❌ Failed to show notification:', error);
-      // フォールバック通知
-      await self.registration.showNotification('StudyQuest', {
-        body: '新しい通知があります',
-        icon: '/icon-192x192.png',
-        tag: 'fallback-notification'
-      });
+      console.error('❌ Primary notification display failed:', error);
+      
+      // CRITICAL iOS fallback: ALWAYS show some notification to prevent silent push
+      try {
+        const fallbackNotification = await self.registration.showNotification('StudyQuest 通知', {
+          body: '新しい通知があります（フォールバック）',
+          icon: '/icon-192x192.png',
+          badge: '/icon-96x96.png',
+          tag: 'ios-fallback-notification',
+          requireInteraction: true,
+          silent: false, // NEVER silent on iOS
+          data: {
+            timestamp: Date.now(),
+            source: 'ios-fallback',
+            originalError: error.message
+          }
+        });
+        
+        console.log('🔄 iOS fallback notification displayed');
+        return fallbackNotification;
+        
+      } catch (fallbackError) {
+        console.error('💥 CRITICAL: Both primary and fallback notifications failed on iOS!');
+        console.error('- Primary error:', error);
+        console.error('- Fallback error:', fallbackError);
+        
+        // Last resort: Use basic notification without features
+        return await self.registration.showNotification('StudyQuest', {
+          body: '通知エラー - 基本表示',
+          requireInteraction: true,
+          silent: false
+        });
+      }
     }
   };
 
-  event.waitUntil(showNotification());
+  // CRITICAL: Immediate event.waitUntil() to prevent iOS silent push classification
+  event.waitUntil(handlePush());
 });
 
 // 通知クリック（iOS PWA最適化版）

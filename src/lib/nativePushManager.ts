@@ -400,7 +400,7 @@ export async function unsubscribeFromPush(): Promise<boolean> {
 /**
  * テスト通知を送信（iOS Safari PWA対応強化版）
  */
-export async function sendTestNotification(title: string, body: string): Promise<boolean> {
+export async function sendTestNotification(title: string, body: string, options: any = {}): Promise<boolean> {
   console.log('🧪 Starting test notification (iOS safe version)...');
   
   try {
@@ -433,7 +433,8 @@ export async function sendTestNotification(title: string, body: string): Promise
       body: JSON.stringify({
         subscription: subscriptionData,
         title,
-        body
+        body,
+        options
       })
     });
 

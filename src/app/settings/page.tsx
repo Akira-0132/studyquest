@@ -48,6 +48,16 @@ export default function SettingsPage() {
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
   
+  // iOS PWA通知追跡
+  const [notificationDisplayHistory, setNotificationDisplayHistory] = useState<{
+    timestamp: string;
+    title: string;
+    body: string;
+    tag: string;
+    source: string;
+  }[]>([]);
+  const [silentPushCount, setSilentPushCount] = useState(0);
+  
   // 通知スケジューラーの状態
   const [schedulerStatus, setSchedulerStatus] = useState({ running: false, interval: 60000 });
   const [nextNotification, setNextNotification] = useState<{ nextTime: string; timeType: string; minutesUntil: number } | null>(null);
@@ -82,6 +92,59 @@ export default function SettingsPage() {
     const timestamp = new Date().toLocaleTimeString();
     setDebugLogs(prev => [...prev.slice(-9), `${timestamp}: ${message}`]);
   };
+
+  // iOS PWA通知表示イベントを追跡
+  const trackNotificationDisplay = (notificationInfo: {
+    title: string;
+    body: string;
+    tag: string;
+    timestamp: number;
+    source?: string;
+  }) => {
+    const displayEvent = {
+      timestamp: new Date(notificationInfo.timestamp).toLocaleTimeString(),
+      title: notificationInfo.title,
+      body: notificationInfo.body.substring(0, 50) + (notificationInfo.body.length > 50 ? '...' : ''),
+      tag: notificationInfo.tag,
+      source: notificationInfo.source || 'unknown'
+    };
+    
+    const newHistory = [...notificationDisplayHistory.slice(-9), displayEvent];
+    setNotificationDisplayHistory(newHistory);
+    
+    // 履歴を localStorage に保存
+    localStorage.setItem('ios_notification_history', JSON.stringify(newHistory));
+    
+    // Silent pushの追跡をリセット（通知が表示されたということは成功）
+    setSilentPushCount(0);
+    localStorage.setItem('ios_silent_push_count', '0');
+    
+    addDebugLog(`📱 iOS Notification Displayed: ${displayEvent.title} (${displayEvent.tag})`);
+  };
+
+  // Service WorkerからのNotification Display イベントを監視
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data && event.data.type === 'NOTIFICATION_DISPLAYED') {
+          trackNotificationDisplay(event.data.notification);
+        } else if (event.data && event.data.type === 'GET_SILENT_PUSH_COUNT') {
+          // Service Workerからのsilent pushカウント要求に応答
+          if (event.ports && event.ports[0]) {
+            event.ports[0].postMessage({
+              silentPushCount: silentPushCount
+            });
+          }
+        }
+      };
+      
+      navigator.serviceWorker.addEventListener('message', handleMessage);
+      
+      return () => {
+        navigator.serviceWorker.removeEventListener('message', handleMessage);
+      };
+    }
+  }, [silentPushCount]);
 
   // コンソールログをオーバーライド
   useEffect(() => {
@@ -257,6 +320,100 @@ export default function SettingsPage() {
       
       alert('❌ バックグラウンド通知のセットアップに失敗しました。\\n\\nデバッグログで詳細を確認してください。');
       return false;
+    }
+  };
+
+  // バックグラウンド通知テスト（iOS対応強化版）
+  const sendBackgroundNotificationTest = async () => {
+    addDebugLog('🧪 Background notification test starting (iOS PWA optimized)...');
+    
+    try {
+      // iOS事前診断
+      if (deviceInfo.isIOS) {
+        const health = await performIOSSystemDiagnosis();
+        if (health && !health.healthy) {
+          addDebugLog('⚠️ iOS system issues detected before test');
+          alert(`⚠️ iOS システムに問題が検出されました：\\n\\n${health.issues.join('\\n')}\\n\\n推奨解決策：\\n${health.recommendations.join('\\n')}\\n\\nそれでもテストを続行しますか？`);
+        }
+      }
+      
+      // Step 1: 即座のテスト通知
+      addDebugLog('📋 Step 1: Immediate test notification');
+      const immediateSuccess = await sendTestNotification(
+        '🧪 StudyQuest - 即座テスト',
+        'アプリがフォアグラウンドにある状態での通知テストです。'
+      );
+      
+      if (!immediateSuccess) {
+        addDebugLog('❌ Immediate test failed - aborting background test');
+        alert('❌ 即座の通知テストに失敗しました。\\n\\nバックグラウンドテストを中止します。');
+        return;
+      }
+      
+      addDebugLog('✅ Immediate test notification succeeded');
+      
+      // Step 2: Background notification test with delay
+      const confirmBackground = confirm(
+        '🚀 バックグラウンド通知テストを開始します\\n\\n【テスト手順】\\n' +
+        '1. "OK"をクリック\\n' +
+        '2. 5秒後にアプリがバックグラウンドに移動するよう指示されます\\n' +
+        '3. 10秒後にバックグラウンド通知が送信されます\\n' +
+        '4. 通知が表示されるか確認してください\\n\\n続行しますか？'
+      );
+      
+      if (!confirmBackground) {
+        addDebugLog('🔕 Background test cancelled by user');
+        return;
+      }
+      
+      // Countdown for background preparation
+      for (let i = 5; i >= 1; i--) {
+        addDebugLog(`⏰ Background preparation: ${i} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      alert('📱 今すぐアプリをバックグラウンドに移動してください！\\n\\n' +
+            '（ホームボタンを押すか、他のアプリに切り替え）\\n\\n' +
+            '10秒後にバックグラウンド通知が送信されます。');
+      
+      // Wait for user to background the app
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Step 3: Send background notification
+      addDebugLog('📋 Step 3: Sending background notification...');
+      const backgroundSuccess = await sendTestNotification(
+        '🌙 StudyQuest - バックグラウンドテスト',
+        '🎉 バックグラウンド通知が正常に動作しています！iOS PWAでの通知配信が成功しました。',
+        { requireInteraction: true, tag: 'background-test' }
+      );
+      
+      if (backgroundSuccess) {
+        addDebugLog('✅ Background notification sent successfully');
+        
+        // Wait a moment then show result dialog
+        setTimeout(() => {
+          alert('📊 バックグラウンド通知テスト完了！\\n\\n' +
+                '✅ サーバーからの送信: 成功\\n' +
+                '📱 通知表示: 確認してください\\n\\n' +
+                (deviceInfo.isIOS ? 
+                  '【iOS確認事項】\\n・通知は画面上部に表示されましたか？\\n・音/振動はありましたか？\\n・通知センターに残っていますか？' :
+                  '【確認事項】\\n・通知は表示されましたか？\\n・音はありましたか？'
+                ));
+        }, 3000);
+        
+      } else {
+        addDebugLog('❌ Background notification sending failed');
+        alert('❌ バックグラウンド通知の送信に失敗しました。\\n\\n' +
+              '考えられる原因：\\n' +
+              '・iOS通知システムの制限\\n' +
+              '・Silent pushの累積\\n' +
+              '・PWAの不適切なインストール\\n\\n' +
+              'デバッグログで詳細を確認してください。');
+      }
+      
+    } catch (error) {
+      addDebugLog(`❌ Background notification test error: ${error}`);
+      alert(`❌ バックグラウンド通知テストエラー: ${error}`);
     }
   };
 
@@ -560,6 +717,24 @@ export default function SettingsPage() {
         
         setDeviceInfo({ isIOS, isPWA, notificationSupported });
         
+        // iOS Silent Push 追跡の初期化
+        if (isIOS) {
+          const savedSilentCount = localStorage.getItem('ios_silent_push_count');
+          const silentCount = savedSilentCount ? parseInt(savedSilentCount) : 0;
+          setSilentPushCount(silentCount);
+          
+          // 通知表示履歴の復元
+          const savedHistory = localStorage.getItem('ios_notification_history');
+          if (savedHistory) {
+            try {
+              const history = JSON.parse(savedHistory);
+              setNotificationDisplayHistory(history);
+            } catch (e) {
+              console.warn('Failed to restore notification history:', e);
+            }
+          }
+        }
+        
         // PWA状態をチェック
         addDebugLog(`📱 Device Environment:`);
         addDebugLog(`- iOS Device: ${isIOS}`);
@@ -687,7 +862,37 @@ export default function SettingsPage() {
                         </span>
                       </div>
                     )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-blue-800 dark:text-blue-200">Silent Push 回数</span>
+                      <span className={silentPushCount === 0 ? 'text-green-600' : silentPushCount < 3 ? 'text-yellow-600' : 'text-red-600'}>
+                        {silentPushCount}/3
+                      </span>
+                    </div>
                   </div>
+                  
+                  {/* iOS 通知表示履歴 */}
+                  {notificationDisplayHistory.length > 0 && (
+                    <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/30 rounded-lg">
+                      <h4 className="font-medium text-green-900 dark:text-green-100 mb-2">📱 通知表示履歴 (最新5件)</h4>
+                      <div className="space-y-1 text-xs">
+                        {notificationDisplayHistory.slice(-5).reverse().map((notification, index) => (
+                          <div key={index} className="text-green-800 dark:text-green-200 border-b border-green-200 dark:border-green-700 pb-1">
+                            <div className="flex justify-between">
+                              <span className="font-medium">{notification.title}</span>
+                              <span>{notification.timestamp}</span>
+                            </div>
+                            <div className="text-green-600 dark:text-green-400">
+                              {notification.body} (tag: {notification.tag})
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {notificationDisplayHistory.length === 0 && (
+                        <p className="text-xs text-green-700 dark:text-green-300">まだ通知が表示されていません</p>
+                      )}
+                    </div>
+                  )}
+                </div>
                   
                   {!deviceInfo.isPWA && (
                     <div className="mt-3">
@@ -756,12 +961,23 @@ export default function SettingsPage() {
                       </button>
                     </div>
                     
-                    <button
-                      onClick={sendTestPushNotification}
-                      className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
-                    >
-                      🧪 テスト通知を送信
-                    </button>
+                    <div className="grid grid-cols-1 gap-2">
+                      <button
+                        onClick={sendTestPushNotification}
+                        className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                      >
+                        🧪 テスト通知を送信
+                      </button>
+                      
+                      {deviceInfo.isIOS && (
+                        <button
+                          onClick={sendBackgroundNotificationTest}
+                          className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                        >
+                          🌙 バックグラウンド通知テスト（iOS専用）
+                        </button>
+                      )}
+                    </div>
                     
                     <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/30 rounded-lg">
                       <p className="text-xs text-yellow-800 dark:text-yellow-200 mb-2">
