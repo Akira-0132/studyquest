@@ -11,8 +11,13 @@ import {
   sendTestNotification,
   getPushPermissionState,
   getActiveSubscription,
-  scheduleNotifications
+  scheduleNotifications,
+  isiOSSafariPWA,
+  isPWAInstalled,
+  isiOSNotificationSupported
 } from '@/lib/nativePushManager';
+import { iosNotificationWorkaround } from '@/lib/iosNotificationWorkaround';
+import { IOSPWAGuide } from '@/components/IOSPWAGuide';
 
 export default function SettingsPage() {
   const [notificationSettings, setNotificationSettings] = useState({
@@ -35,6 +40,19 @@ export default function SettingsPage() {
   // デバッグログを画面に表示するためのstate
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
+  
+  // iOS PWA関連state
+  const [showPWAGuide, setShowPWAGuide] = useState(false);
+  const [iosSystemHealth, setIOSSystemHealth] = useState<{
+    healthy: boolean;
+    issues: string[];
+    recommendations: string[];
+  } | null>(null);
+  const [deviceInfo, setDeviceInfo] = useState({
+    isIOS: false,
+    isPWA: false,
+    notificationSupported: { supported: false, reason: '', recommendations: [] as string[] }
+  });
 
   // コンソールログをキャプチャして画面に表示
   const addDebugLog = (message: string) => {
@@ -63,16 +81,69 @@ export default function SettingsPage() {
     };
   }, []);
 
-  // 🚀 バックグラウンド通知システム（ネイティブ実装）
-  const setupBackgroundNotifications = async () => {
-    addDebugLog('🚀 バックグラウンド通知セットアップ開始...');
+  // iOS システム診断
+  const performIOSSystemDiagnosis = async () => {
+    addDebugLog('🔍 Starting iOS system diagnosis...');
     
     try {
+      // デバイス情報更新
+      const isIOS = isiOSSafariPWA();
+      const isPWA = isPWAInstalled();
+      const notificationSupported = isiOSNotificationSupported();
+      
+      setDeviceInfo({ isIOS, isPWA, notificationSupported });
+      addDebugLog(`📱 Device Info: iOS=${isIOS}, PWA=${isPWA}, Notifications=${notificationSupported.supported}`);
+      
+      // システムヘルスチェック
+      const health = await iosNotificationWorkaround.checkSystemHealth();
+      setIOSSystemHealth(health);
+      
+      addDebugLog(`🏥 System Health: ${health.healthy ? 'HEALTHY' : 'ISSUES FOUND'}`);
+      if (health.issues.length > 0) {
+        health.issues.forEach(issue => addDebugLog(`⚠️ Issue: ${issue}`));
+        health.recommendations.forEach(rec => addDebugLog(`💡 Recommendation: ${rec}`));
+      }
+      
+      return health;
+    } catch (error) {
+      addDebugLog(`❌ iOS diagnosis failed: ${error}`);
+      return null;
+    }
+  };
+
+  // 🚀 バックグラウンド通知システム（iOS対応強化版）
+  const setupBackgroundNotifications = async () => {
+    addDebugLog('🚀 バックグラウンド通知セットアップ開始（iOS対応版）...');
+    
+    try {
+      // iOS事前診断
+      const health = await performIOSSystemDiagnosis();
+      if (health && !health.healthy) {
+        addDebugLog('⚠️ iOS system issues detected, but proceeding...');
+        
+        // PWAインストールが必要な場合はガイドを表示
+        if (deviceInfo.isIOS && !deviceInfo.isPWA) {
+          addDebugLog('📱 iOS device without PWA installation detected');
+          alert('📱 iOSでバックグラウンド通知を利用するには、アプリをホーム画面に追加する必要があります。\\n\\nガイドを表示しますか？');
+          setShowPWAGuide(true);
+          return false;
+        }
+      }
+      
       // ブラウザ環境確認
       addDebugLog(`🔍 環境確認:`);
       addDebugLog(`- User Agent: ${navigator.userAgent.substring(0, 50)}...`);
       addDebugLog(`- PWA Mode: ${window.matchMedia('(display-mode: standalone)').matches}`);
       addDebugLog(`- HTTPS: ${location.protocol === 'https:'}`);
+      addDebugLog(`- iOS Device: ${deviceInfo.isIOS}`);
+      addDebugLog(`- PWA Installed: ${deviceInfo.isPWA}`);
+      
+      // iOS特有の事前チェック
+      if (deviceInfo.isIOS && !deviceInfo.notificationSupported.supported) {
+        addDebugLog(`❌ iOS notification requirements not met: ${deviceInfo.notificationSupported.reason}`);
+        alert(`❌ iOS通知要件が満たされていません。\\n\\n原因: ${deviceInfo.notificationSupported.reason}\\n\\n推奨解決策:\\n${deviceInfo.notificationSupported.recommendations?.join('\\n')}`);
+        return false;
+      }
       
       // 権限リクエスト
       addDebugLog('📋 Step 1: 通知権限リクエスト');
@@ -81,18 +152,40 @@ export default function SettingsPage() {
       
       if (permission !== 'granted') {
         addDebugLog('❌ 通知権限が拒否されました');
-        alert('❌ 通知権限が必要です。\\n\\n【解決方法】\\n1. ブラウザの設定を開く\\n2. このサイトの通知を「許可」に設定\\n3. ページを再読み込み');
+        const errorMessage = deviceInfo.isIOS 
+          ? '❌ 通知権限が必要です。\\n\\n【iOS解決方法】\\n1. 設定 → Safari → Webサイト → 通知\\n2. このサイトを「許可」に設定\\n3. アプリを再起動'
+          : '❌ 通知権限が必要です。\\n\\n【解決方法】\\n1. ブラウザの設定を開く\\n2. このサイトの通知を「許可」に設定\\n3. ページを再読み込み';
+        alert(errorMessage);
         return false;
       }
       
       addDebugLog('✅ 通知権限が許可されました');
       
-      // プッシュ購読（詳細ログは関数内で出力）
+      // プッシュ購読（iOS対応強化版）
       addDebugLog('📋 Step 2: プッシュ購読作成');
-      const subscription = await subscribeToPush();
+      let subscription;
+      
+      try {
+        subscription = await subscribeToPush();
+      } catch (error) {
+        addDebugLog(`❌ 標準購読失敗、iOS回避策を適用: ${error}`);
+        
+        // iOS特有のエラーの場合、回避策を適用
+        if (deviceInfo.isIOS && (error as Error).message.includes('iOS')) {
+          addDebugLog('🔧 Applying iOS-specific workarounds...');
+          alert('iOS Safari固有の問題が発生しました。\\n\\n回避策:\\n1. アプリを完全に閉じる\\n2. Safariを再起動\\n3. ホーム画面からアプリを開き直す\\n4. 再度通知設定を試す');
+          return false;
+        }
+        
+        throw error;
+      }
+      
       if (!subscription) {
         addDebugLog('❌ プッシュ購読作成に失敗');
-        alert('❌ プッシュ通知の購読に失敗しました。\\n\\n【考えられる原因】\\n- Service Workerの問題\\n- VAPIDキーの問題\\n- iOS Safari固有の制限\\n\\nデバッグログを確認してください。');
+        const errorMessage = deviceInfo.isIOS
+          ? '❌ iOS プッシュ通知の購読に失敗しました。\\n\\n【iOS対策】\\n- Safari/PWAを完全に再起動\\n- ホーム画面からアプリを開く\\n- iOS 16.4以降であることを確認\\n\\nデバッグログで詳細を確認してください。'
+          : '❌ プッシュ通知の購読に失敗しました。\\n\\n【考えられる原因】\\n- Service Workerの問題\\n- VAPIDキーの問題\\n\\nデバッグログを確認してください。';
+        alert(errorMessage);
         return false;
       }
       
@@ -137,11 +230,35 @@ export default function SettingsPage() {
     }
   };
 
-  // テスト通知送信
+  // テスト通知送信（iOS対応強化版）
   const sendTestPushNotification = async () => {
-    addDebugLog('🧪 テスト通知送信中...');
+    addDebugLog('🧪 テスト通知送信中（iOS対応版）...');
     
     try {
+      // iOS事前チェック
+      if (deviceInfo.isIOS) {
+        const health = await performIOSSystemDiagnosis();
+        if (health && !health.healthy) {
+          addDebugLog('⚠️ iOS system issues detected for test notification');
+          // フォールバック機能を使用
+          const fallbackSuccess = await iosNotificationWorkaround.sendNotificationWithRetry(
+            '🧪 StudyQuest テスト通知（iOS対応）',
+            'iOS PWA通知システムが動作しています！バックグラウンドでも通知が届きます。',
+            { requireInteraction: true }
+          );
+          
+          if (fallbackSuccess) {
+            addDebugLog('✅ iOS fallback test notification sent');
+            alert('🧪 iOS対応テスト通知を送信しました！\\n\\n📱 アプリをバックグラウンドにしても通知が届くことを確認してください。\\n\\n⚠️ iOS特有の制限により、フォールバック機能を使用しました。');
+          } else {
+            addDebugLog('❌ iOS fallback test notification failed');
+            alert('❌ iOS テスト通知の送信に失敗しました。\\n\\n対策：\\n1. Safari/PWAを再起動\\n2. 通知権限を確認\\n3. PWAがホーム画面からインストールされているか確認');
+          }
+          return;
+        }
+      }
+      
+      // 標準テスト通知
       const success = await sendTestNotification(
         '🚀 StudyQuest テスト通知',
         'バックグラウンド通知が正常に動作しています！アプリを閉じても通知が届きます。'
@@ -149,13 +266,26 @@ export default function SettingsPage() {
       
       if (success) {
         addDebugLog('✅ テスト通知送信成功');
-        alert('テスト通知を送信しました！\\n\\nアプリをバックグラウンドにしても通知が届くことを確認してください。');
+        const message = deviceInfo.isIOS 
+          ? 'テスト通知を送信しました！\\n\\n📱 iOSでは以下をご確認ください：\\n・ホーム画面からアプリを開いている\\n・通知権限が許可されている\\n・アプリをバックグラウンドにしても通知が届く'
+          : 'テスト通知を送信しました！\\n\\nアプリをバックグラウンドにしても通知が届くことを確認してください。';
+        alert(message);
       } else {
         addDebugLog('❌ テスト通知送信失敗');
-        alert('テスト通知の送信に失敗しました。');
+        const errorMessage = deviceInfo.isIOS
+          ? '❌ iOS テスト通知の送信に失敗しました。\\n\\n対策：\\n1. PWAをホーム画面からインストール\\n2. Safari/PWAを再起動\\n3. 通知権限を再確認'
+          : '❌ テスト通知の送信に失敗しました。\\n\\n通知設定と権限を確認してください。';
+        alert(errorMessage);
       }
     } catch (error) {
       addDebugLog(`❌ テスト通知エラー: ${error}`);
+      
+      // iOS特有のエラー処理
+      if (deviceInfo.isIOS && (error as Error).message.includes('iOS')) {
+        alert('❌ iOS Safari固有のエラーが発生しました。\\n\\n回避策を試してください：\\n1. アプリを完全に閉じる\\n2. Safariを再起動\\n3. ホーム画面からアプリを開く\\n4. 通知設定をやり直す');
+      } else {
+        alert(`❌ テスト通知エラー: ${error}`);
+      }
     }
   };
 
@@ -245,13 +375,59 @@ export default function SettingsPage() {
       setNotificationSettings(JSON.parse(saved));
     }
 
-    // PWA状態をチェック
-    const isPWA = window.matchMedia('(display-mode: standalone)').matches;
-    addDebugLog(`PWA状態: ${isPWA ? '✅ PWAモード' : '❌ ブラウザモード'}`);
-    
-    if (!isPWA && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
-      addDebugLog('⚠️ iPhoneでPWAではない状態（ホーム画面追加推奨）');
-    }
+    // iOS PWA環境の初期診断
+    const initializeIOSEnvironment = async () => {
+      try {
+        // デバイス情報取得
+        const isIOS = isiOSSafariPWA();
+        const isPWA = isPWAInstalled();
+        const notificationSupported = isiOSNotificationSupported();
+        
+        setDeviceInfo({ isIOS, isPWA, notificationSupported });
+        
+        // PWA状態をチェック
+        addDebugLog(`📱 Device Environment:`);
+        addDebugLog(`- iOS Device: ${isIOS}`);
+        addDebugLog(`- PWA Mode: ${isPWA}`);
+        addDebugLog(`- Notification Support: ${notificationSupported.supported}`);
+        
+        if (isIOS) {
+          if (!isPWA) {
+            addDebugLog('⚠️ iOS device without PWA installation (home screen addition recommended)');
+          }
+          
+          if (!notificationSupported.supported) {
+            addDebugLog(`⚠️ iOS notification not supported: ${notificationSupported.reason}`);
+            if (notificationSupported.recommendations) {
+              notificationSupported.recommendations.forEach(rec => 
+                addDebugLog(`💡 Recommendation: ${rec}`)
+              );
+            }
+          }
+          
+          // iOS システムヘルスチェック
+          await performIOSSystemDiagnosis();
+        }
+        
+        // iOS向けのフォールバックスケジューラーをチェック
+        if (isIOS && notificationSettings.enabled) {
+          addDebugLog('🔧 Checking iOS fallback scheduler...');
+          const fallbackData = localStorage.getItem('ios_notification_fallback');
+          if (fallbackData) {
+            addDebugLog('✅ iOS fallback scheduler found');
+          } else {
+            addDebugLog('📅 Setting up iOS fallback scheduler...');
+            await iosNotificationWorkaround.scheduleNotificationsFallback(notificationSettings);
+          }
+        }
+        
+        addDebugLog('✅ iOS environment initialization completed');
+      } catch (error) {
+        addDebugLog(`❌ iOS environment initialization failed: ${error}`);
+      }
+    };
+
+    initializeIOSEnvironment();
   }, []);
 
   return (
@@ -274,6 +450,88 @@ export default function SettingsPage() {
                 通知設定とアカウント情報
               </p>
             </div>
+
+            {/* iOS PWA ガイドとヘルプ */}
+            {deviceInfo.isIOS && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                  📱 iOS PWA サポート
+                </h2>
+                
+                <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-medium text-blue-900 dark:text-blue-100">環境チェック</h3>
+                    <button
+                      onClick={performIOSSystemDiagnosis}
+                      className="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded"
+                    >
+                      再診断
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-blue-800 dark:text-blue-200">iOSデバイス</span>
+                      <span className={deviceInfo.isIOS ? 'text-green-600' : 'text-red-600'}>
+                        {deviceInfo.isIOS ? '✅' : '❌'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-blue-800 dark:text-blue-200">PWAインストール</span>
+                      <span className={deviceInfo.isPWA ? 'text-green-600' : 'text-red-600'}>
+                        {deviceInfo.isPWA ? '✅' : '❌'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-blue-800 dark:text-blue-200">通知対応</span>
+                      <span className={deviceInfo.notificationSupported.supported ? 'text-green-600' : 'text-red-600'}>
+                        {deviceInfo.notificationSupported.supported ? '✅' : '❌'}
+                      </span>
+                    </div>
+                    {iosSystemHealth && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-blue-800 dark:text-blue-200">システム健全性</span>
+                        <span className={iosSystemHealth.healthy ? 'text-green-600' : 'text-orange-600'}>
+                          {iosSystemHealth.healthy ? '✅' : '⚠️'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {!deviceInfo.isPWA && (
+                    <div className="mt-3">
+                      <button
+                        onClick={() => setShowPWAGuide(true)}
+                        className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                      >
+                        📱 PWAインストールガイドを表示
+                      </button>
+                    </div>
+                  )}
+                  
+                  {iosSystemHealth && !iosSystemHealth.healthy && (
+                    <div className="mt-3 p-3 bg-orange-50 dark:bg-orange-900/30 rounded-lg">
+                      <h4 className="font-medium text-orange-900 dark:text-orange-100 mb-2">検出された問題</h4>
+                      <ul className="list-disc list-inside space-y-1 text-sm text-orange-800 dark:text-orange-200">
+                        {iosSystemHealth.issues.map((issue, index) => (
+                          <li key={index}>{issue}</li>
+                        ))}
+                      </ul>
+                      {iosSystemHealth.recommendations.length > 0 && (
+                        <>
+                          <h4 className="font-medium text-orange-900 dark:text-orange-100 mt-2 mb-1">推奨解決策</h4>
+                          <ul className="list-disc list-inside space-y-1 text-sm text-orange-800 dark:text-orange-200">
+                            {iosSystemHealth.recommendations.map((rec, index) => (
+                              <li key={index}>{rec}</li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* バックグラウンド通知設定 */}
             <div className="space-y-4">
@@ -446,6 +704,14 @@ export default function SettingsPage() {
           </motion.div>
         </div>
       </div>
+      
+      {/* iOS PWA インストールガイド */}
+      {showPWAGuide && (
+        <IOSPWAGuide 
+          trigger="manual"
+          onClose={() => setShowPWAGuide(false)}
+        />
+      )}
     </ClientOnly>
   );
 }

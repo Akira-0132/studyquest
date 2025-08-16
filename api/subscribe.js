@@ -2,7 +2,7 @@
 const webpush = require('web-push');
 
 // VAPID設定
-webpush.setVapIDDetails(
+webpush.setVapidDetails(
   'mailto:studyquest@example.com',
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BHvx5bXyuSIfYrkymeGlH6lR4SjsVJo7WZ1JsPzFAo3uNEXamy_qSBVEBPgIzeEgrscBoRSKZMo2GRTguiGeBP0',
   process.env.VAPID_PRIVATE_KEY || '6G5JiT6MSZlBNNXeWTVGy40V7-m176G7iWT3M7j2Fr4'
