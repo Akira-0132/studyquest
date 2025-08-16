@@ -7,7 +7,7 @@
 3. Import Git Repository
 4. Select: `https://github.com/Akira-0132/studyquest`
 5. Configure project:
-   - Project Name: `studyquest-pwa-2025` (or similar unique name)
+   - Project Name: `studyquest-ios-20250816` (or any unique name)
    - Framework Preset: Next.js
    - Root Directory: `studyquest` (if needed)
    - Build Command: `npm run build`
