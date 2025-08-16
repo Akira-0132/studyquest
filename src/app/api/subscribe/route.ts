@@ -9,8 +9,8 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY || '6G5JiT6MSZlBNNXeWTVGy40V7-m176G7iWT3M7j2Fr4'
 );
 
-// 簡易的な購読情報ストレージ（本格実装はデータベース使用）
-const subscriptions = new Map();
+// 共有ストレージインポート
+import { subscriptions, generateSubscriptionKey } from '@/lib/serverStorage';
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     // エンドポイントをキーとして使用
-    const subscriptionKey = btoa(subscription.endpoint).substring(0, 20);
+    const subscriptionKey = generateSubscriptionKey(subscription.endpoint);
     
     // 購読情報を保存
     subscriptions.set(subscriptionKey, {
@@ -81,7 +81,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Valid subscription required' }, { status: 400 });
     }
 
-    const subscriptionKey = btoa(subscription.endpoint).substring(0, 20);
+    const subscriptionKey = generateSubscriptionKey(subscription.endpoint);
     const deleted = subscriptions.delete(subscriptionKey);
 
     console.log(`🗑️ Subscription ${deleted ? 'deleted' : 'not found'}: ${subscriptionKey}`);
