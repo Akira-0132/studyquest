@@ -100,6 +100,57 @@ export default function SettingsPage() {
     addDebugLog('🚀 バックグラウンド通知セットアップ開始（iOS対応版）...');
     
     try {
+      // Service Worker登録確認と自動復旧
+      addDebugLog('📋 Service Worker状態確認...');
+      if ('serviceWorker' in navigator) {
+        let registration = await navigator.serviceWorker.getRegistration();
+        
+        if (!registration) {
+          addDebugLog('⚠️ Service Worker未登録 - 自動登録開始...');
+          try {
+            registration = await navigator.serviceWorker.register('/sw.js', { 
+              scope: '/',
+              updateViaCache: 'none'
+            });
+            addDebugLog(`✅ SW自動登録完了: ${registration.scope}`);
+            
+            // アクティブになるまで少し待つ
+            if (registration.installing) {
+              addDebugLog('⏳ SW activation待機中...');
+              await new Promise((resolve) => {
+                const checkState = () => {
+                  if (registration!.active) {
+                    addDebugLog('✅ SW activated');
+                    resolve(undefined);
+                  } else {
+                    setTimeout(checkState, 100);
+                  }
+                };
+                checkState();
+              });
+            }
+          } catch (swError) {
+            addDebugLog(`❌ SW自動登録失敗: ${swError}`);
+            alert('❌ Service Workerの登録に失敗しました。\n\n手順:\n1. 🔄 SW強制登録ボタンを押す\n2. 再度通知設定を試す');
+            return false;
+          }
+        } else {
+          addDebugLog(`✅ Service Worker登録済み: ${registration.scope}`);
+        }
+        
+        // Push Managerが利用可能か確認
+        if (!registration.pushManager) {
+          addDebugLog('❌ Push Manager利用不可');
+          alert('❌ このブラウザはプッシュ通知をサポートしていません');
+          return false;
+        }
+        
+        addDebugLog('✅ Service Worker準備完了');
+      } else {
+        addDebugLog('❌ Service Worker not supported');
+        alert('❌ このブラウザはService Workerをサポートしていません');
+        return false;
+      }
       // iOS事前診断
       const health = await performIOSSystemDiagnosis();
       if (health && !health.healthy) {
@@ -722,30 +773,63 @@ export default function SettingsPage() {
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={async () => {
-                    addDebugLog('🔄 Service Worker強制更新開始...');
+                    addDebugLog('🔄 Service Worker強制登録開始...');
                     try {
                       if ('serviceWorker' in navigator) {
-                        const registrations = await navigator.serviceWorker.getRegistrations();
-                        for (let registration of registrations) {
-                          addDebugLog(`SW登録解除: ${registration.scope}`);
-                          await registration.unregister();
+                        // まず現在の登録状況を確認
+                        const currentReg = await navigator.serviceWorker.getRegistration();
+                        addDebugLog(`現在の登録状況: ${!!currentReg}`);
+                        
+                        if (currentReg) {
+                          addDebugLog(`既存SW: ${currentReg.scope}, active: ${!!currentReg.active}`);
+                          // 既存のを削除
+                          await currentReg.unregister();
+                          addDebugLog('✅ 既存SW削除完了');
                         }
-                        addDebugLog('✅ 全SW登録解除完了');
+                        
+                        // 少し待つ
+                        await new Promise(resolve => setTimeout(resolve, 500));
                         
                         // 新しくService Workerを登録
-                        const newReg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-                        addDebugLog(`✅ 新SW登録完了: ${newReg.scope}`);
+                        addDebugLog('📋 新しいSW登録開始...');
+                        const newReg = await navigator.serviceWorker.register('/sw.js', { 
+                          scope: '/',
+                          updateViaCache: 'none' // キャッシュを無視
+                        });
                         
-                        alert('🔄 Service Worker更新完了！ページを再読み込みしてください。');
+                        addDebugLog(`✅ 新SW登録完了: ${newReg.scope}`);
+                        addDebugLog(`SW状態: installing=${!!newReg.installing}, waiting=${!!newReg.waiting}, active=${!!newReg.active}`);
+                        
+                        // アクティブになるまで待つ
+                        if (newReg.installing) {
+                          addDebugLog('⏳ SW activation待機中...');
+                          await new Promise((resolve) => {
+                            newReg.installing!.addEventListener('statechange', () => {
+                              if (newReg.installing!.state === 'activated') {
+                                addDebugLog('✅ SW activated');
+                                resolve(undefined);
+                              }
+                            });
+                          });
+                        }
+                        
+                        // 最終確認
+                        const finalReg = await navigator.serviceWorker.getRegistration();
+                        addDebugLog(`最終確認: SW登録=${!!finalReg}, active=${!!finalReg?.active}`);
+                        
+                        alert('🔄 Service Worker登録完了！\n\n次に「バックグラウンド通知を有効にする」ボタンを押してください。');
+                      } else {
+                        addDebugLog('❌ Service Worker not supported');
+                        alert('❌ このブラウザはService Workerをサポートしていません');
                       }
                     } catch (error) {
-                      addDebugLog(`❌ SW更新エラー: ${error}`);
-                      alert('❌ Service Worker更新に失敗しました');
+                      addDebugLog(`❌ SW登録エラー: ${error}`);
+                      alert(`❌ Service Worker登録に失敗しました: ${error}`);
                     }
                   }}
                   className="bg-purple-600 hover:bg-purple-700 text-white text-xs py-2 px-3 rounded transition-colors"
                 >
-                  🔄 SW更新
+                  🔄 SW強制登録
                 </button>
                 
                 <button
